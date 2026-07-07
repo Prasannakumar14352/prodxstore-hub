@@ -10,11 +10,11 @@
     },
     {
       "source": "/kidsworksheets",
-      "destination": "https://kidsworksheets.vercel.app/"
+      "destination": "https://kidsworksheets.vercel.app/kidsworksheets/"
     },
     {
       "source": "/kidsworksheets/:path*",
-      "destination": "https://kidsworksheets.vercel.app/:path*"
+      "destination": "https://kidsworksheets.vercel.app/kidsworksheets/:path*"
     },
     {
       "source": "/promptpack",
