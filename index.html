@@ -106,11 +106,11 @@ footer{border-top:1px solid var(--line);padding:44px 0 36px;margin-top:48px}
 
 <nav>
   <div class="nav-in">
-    <a class="logo" href="/"><img alt="" src="./logo.png" width=200 height=50 /></a>
+    <a class="logo" href="/"><span class="logo-x" aria-hidden="true"></span>ProdXStore</a>
     <div class="nav-links">
       <a href="#featured">Featured</a>
       <a href="#catalog">All products</a>
-      <a href="productsupport@prodxstore.com">Contact</a>
+      <a href="mailto:hello@prodxstore.com">Contact</a>
       <a class="nav-cta" href="#catalog">Browse catalog</a>
     </div>
   </div>
@@ -157,7 +157,7 @@ footer{border-top:1px solid var(--line);padding:44px 0 36px;margin-top:48px}
 <footer>
   <div class="wrap">
     <div class="f-bottom">
-      <span>© 2026 prodxstore.com · <a href="mailto:productsupport@prodxstore.com" style="color:var(--mut)">productsupport@prodxstore.com</a></span>
+      <span>© 2026 prodxstore.com · <a href="mailto:hello@prodxstore.com" style="color:var(--mut)">hello@prodxstore.com</a></span>
       <span>Not affiliated with Anthropic, OpenAI or Google.</span>
     </div>
   </div>
@@ -171,19 +171,24 @@ footer{border-top:1px solid var(--line);padding:44px 0 36px;margin-top:48px}
    so you update the catalog without touching HTML.
    ═══════════════════════════════════════════════════════ */
 const PRODUCTS = [
-  {slug:"aistudio", name:"CreatorFlow AI", kind:"AI Content Studio", icon:"✨", color:"#8B7CF6",
+  {url:"https://ai.prodxstore.com", display:"ai.prodxstore.com",
+   name:"CreatorFlow AI", kind:"AI Content Studio", icon:"✨", color:"#8B7CF6",
    category:"AI Tools", status:"live", featured:true,
    desc:"Generate videos, carousels, images, captions and hashtags for every platform — from one dashboard."},
-  {slug:"promptpack", name:"Claude Prompt Pack", kind:"Prompt Library", icon:"📦", color:"#FF6B35",
+  {url:"https://prompts.prodxstore.com", display:"prompts.prodxstore.com",
+   name:"Claude Prompt Pack", kind:"Prompt Library", icon:"📦", color:"#FF6B35",
    category:"Prompt Packs", status:"live", featured:true,
    desc:"4,560 fill-in-the-blank prompts across 20 categories. Copy, fill, paste — expert output in 30 seconds."},
-  {slug:"kidsworksheets", name:"Kids Learning Worksheets", kind:"Little Minds Learn", icon:"🎨", color:"#2DD4BF",
+  {url:"https://kids.prodxstore.com", display:"kids.prodxstore.com",
+   name:"Kids Learning Worksheets", kind:"Little Minds Learn", icon:"🎨", color:"#2DD4BF",
    category:"Kids Learning", status:"live", featured:true,
    desc:"14,000+ printable worksheets, puzzles, tracing and coloring pages for ages 3–10. Unlimited printing."},
-  {slug:"chatgptpack", name:"ChatGPT Prompt Pack", kind:"Prompt Library", icon:"💬", color:"#F5C842",
+  {url:"", display:"coming soon",
+   name:"ChatGPT Prompt Pack", kind:"Prompt Library", icon:"💬", color:"#F5C842",
    category:"Prompt Packs", status:"soon",
    desc:"The same fill-in-the-blank system, tuned for GPT models."},
-  {slug:"geminipack", name:"Gemini Prompt Pack", kind:"Prompt Library", icon:"♊", color:"#8B7CF6",
+  {url:"", display:"coming soon",
+   name:"Gemini Prompt Pack", kind:"Prompt Library", icon:"♊", color:"#8B7CF6",
    category:"Prompt Packs", status:"soon",
    desc:"Prompt formulas built for Google Gemini."},
 ];
@@ -202,11 +207,11 @@ document.getElementById("hero-stats").innerHTML = `
 
 /* ── featured row ── */
 document.getElementById("feat-grid").innerHTML = PRODUCTS.filter(p=>p.featured).map(p=>`
-  <a class="fcard" href="/${p.slug}">
+  <a class="fcard" href="${p.url}">
     <div class="picon" style="background:${p.color}1f;color:${p.color}">${p.icon}</div>
     <div><h3>${p.name}</h3><div class="kind" style="color:${p.color}">${p.kind}</div></div>
     <p>${p.desc}</p>
-    <div class="proute">prodxstore.com<b>/${p.slug}</b></div>
+    <div class="proute"><b>${p.display}</b></div>
     <div class="pgo" style="color:${p.color}">Open <span>→</span></div>
   </a>`).join("");
 
@@ -233,7 +238,7 @@ function renderGrid(){
     `${list.length} product${list.length!==1?"s":""}${activeCat!=="All"?" in "+activeCat:""}${q?` matching "${query}"`:""}`;
   document.getElementById("cat-grid").innerHTML = slice.length ? slice.map(p=>{
     const soon = p.status==="soon";
-    const href = soon ? `mailto:productsupport@prodxstore.com?subject=Notify%20me%3A%20${encodeURIComponent(p.name)}` : `/${p.slug}`;
+    const href = soon ? `mailto:hello@prodxstore.com?subject=Notify%20me%3A%20${encodeURIComponent(p.name)}` : p.url;
     return `<a class="ccard ${soon?"soon":""}" href="${href}">
       <div class="ccard-top">
         <div class="picon" style="background:${p.color}1f;color:${p.color}">${p.icon}</div>
@@ -241,11 +246,11 @@ function renderGrid(){
       </div>
       <p>${p.desc}</p>
       <div class="crow">
-        <span class="proute">/${p.slug}</span>
+        <span class="proute">${p.display}</span>
         <span class="badge ${p.status==="live"?"live":"soon"}">${p.status==="live"?"LIVE":"SOON"}</span>
       </div>
     </a>`;
-  }).join("") : `<div class="empty" style="grid-column:1/-1">No products match "${query}". Try a different word, or <a href="mailto:productsupport@prodxstore.com" style="color:var(--orange)">tell us what you need</a>.</div>`;
+  }).join("") : `<div class="empty" style="grid-column:1/-1">No products match "${query}". Try a different word, or <a href="mailto:hello@prodxstore.com" style="color:var(--orange)">tell us what you need</a>.</div>`;
   const more = document.getElementById("load-more");
   more.hidden = list.length <= shown;
   more.onclick = ()=>{ shown += PAGE_SIZE; renderGrid(); };
