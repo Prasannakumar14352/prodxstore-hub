@@ -2,27 +2,27 @@
   "rewrites": [
     {
       "source": "/aistudio",
-      "destination": "https://YOUR-CREATORFLOW-DEPLOYMENT.vercel.app/aistudio"
+      "destination": "https://creatorflow-ai-six.vercel.app/"
     },
     {
       "source": "/aistudio/:path*",
-      "destination": "https://YOUR-CREATORFLOW-DEPLOYMENT.vercel.app/aistudio/:path*"
+      "destination": "https://creatorflow-ai-six.vercel.app/:path*"
     },
     {
       "source": "/kidsworksheets",
-      "destination": "https://YOUR-KIDS-DEPLOYMENT.vercel.app/kidsworksheets"
+      "destination": "https://kidsworksheets.vercel.app/"
     },
     {
       "source": "/kidsworksheets/:path*",
-      "destination": "https://YOUR-KIDS-DEPLOYMENT.vercel.app/kidsworksheets/:path*"
+      "destination": "https://kidsworksheets.vercel.app/:path*"
     },
     {
       "source": "/promptpack",
-      "destination": "https://YOUR-PROMPTPACK-DEPLOYMENT.vercel.app/index.html"
+      "destination": "https://prompt-pack-landing-zh8q.vercel.app"
     },
     {
       "source": "/promptpack/:path*",
-      "destination": "https://YOUR-PROMPTPACK-DEPLOYMENT.vercel.app/:path*"
+      "destination": "https://prompt-pack-landing-zh8q.vercel.app/:path*"
     }
   ]
 }
