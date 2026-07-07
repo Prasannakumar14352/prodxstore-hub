@@ -1,0 +1,28 @@
+{
+  "rewrites": [
+    {
+      "source": "/aistudio",
+      "destination": "https://YOUR-CREATORFLOW-DEPLOYMENT.vercel.app/aistudio"
+    },
+    {
+      "source": "/aistudio/:path*",
+      "destination": "https://YOUR-CREATORFLOW-DEPLOYMENT.vercel.app/aistudio/:path*"
+    },
+    {
+      "source": "/kidsworksheets",
+      "destination": "https://YOUR-KIDS-DEPLOYMENT.vercel.app/kidsworksheets"
+    },
+    {
+      "source": "/kidsworksheets/:path*",
+      "destination": "https://YOUR-KIDS-DEPLOYMENT.vercel.app/kidsworksheets/:path*"
+    },
+    {
+      "source": "/promptpack",
+      "destination": "https://YOUR-PROMPTPACK-DEPLOYMENT.vercel.app/index.html"
+    },
+    {
+      "source": "/promptpack/:path*",
+      "destination": "https://YOUR-PROMPTPACK-DEPLOYMENT.vercel.app/:path*"
+    }
+  ]
+}
