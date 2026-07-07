@@ -1,5 +1,11 @@
 {
   "rewrites": [
+    { "source": "/kidsworksheets/assets/:path*",
+      "destination": "https://kidsworksheets.vercel.app/assets/:path*" },
+    { "source": "/kidsworksheets",
+      "destination": "https://kidsworksheets.vercel.app/kidsworksheets" },
+    { "source": "/kidsworksheets/:path*",
+      "destination": "https://kidsworksheets.vercel.app/kidsworksheets/:path*" },
     {
       "source": "/aistudio",
       "destination": "https://creatorflow-ai-six.vercel.app/"
@@ -9,18 +15,6 @@
       "destination": "https://creatorflow-ai-six.vercel.app/:path*"
     },
     {
-      "source": "/kidsworksheets/assets/:path*",
-      "destination": "https://kidsworksheets.vercel.app/assets/:path*"
-    },
-    {
-      "source": "/kidsworksheets",
-      "destination": "https://kidsworksheets.vercel.app/kidsworksheets"
-    },
-    {
-      "source": "/kidsworksheets/:path*",
-      "destination": "https://kidsworksheets.vercel.app/kidsworksheets/:path*"
-    },
-    {
       "source": "/promptpack",
       "destination": "https://prompt-pack-landing-zh8q.vercel.app"
     },
@@ -28,5 +22,6 @@
       "source": "/promptpack/:path*",
       "destination": "https://prompt-pack-landing-zh8q.vercel.app/:path*"
     }
-  ]
+  ],
+  "trailingSlash": false
 }
