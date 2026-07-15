@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
@@ -55,6 +56,7 @@ export default function App() {
             </CartProvider>
           </WishlistProvider>
         </BrowserRouter>
+        <Analytics />
       </DefaultProviders>
     </ErrorBoundary>
   );
