@@ -1,25 +1,24 @@
 import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { requireAdmin } from "./users";
 
 /** After uploading, resolve a storageId to its permanent serving URL (admin only) */
 export const resolveStorageUrl = mutation({
   args: { storageId: v.string() },
   handler: async (ctx, args): Promise<string> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
+    await requireAdmin(ctx);
     const url = await ctx.storage.getUrl(args.storageId as Id<"_storage">);
     if (!url) throw new ConvexError({ code: "NOT_FOUND", message: "Storage file not found" });
     return url;
   },
 });
 
-/** Resolve a storageId to its public URL (read-only query for display) */
+/** Resolve a storageId to its public URL (read-only query for display, admin only) */
 export const getUrl = query({
   args: { storageId: v.string() },
   handler: async (ctx, args): Promise<string | null> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
+    await requireAdmin(ctx);
     try {
       return await ctx.storage.getUrl(args.storageId as Id<"_storage">);
     } catch {
@@ -32,10 +31,7 @@ export const getUrl = query({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx): Promise<string> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated" });
-    }
+    await requireAdmin(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });

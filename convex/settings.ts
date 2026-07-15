@@ -1,6 +1,7 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { requireAdmin } from "./users";
 
 // Default fallback rate if live API is unavailable and admin hasn't set one
 const DEFAULT_FALLBACK_RATE = 0.012; // ~1 INR = 0.012 USD
@@ -50,16 +51,7 @@ export const getFallbackRateInternal = internalQuery({
 export const setFallbackRate = mutation({
   args: { rate: v.number() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ message: "Forbidden", code: "FORBIDDEN" });
-    }
+    await requireAdmin(ctx);
 
     if (args.rate <= 0 || args.rate > 1) {
       throw new ConvexError({ message: "Rate must be between 0 and 1 (e.g. 0.012 for ₹1 = $0.012)", code: "BAD_REQUEST" });
@@ -111,16 +103,7 @@ export const getRazorpayKeysInternal = internalQuery({
 export const setRazorpayKeys = mutation({
   args: { keyId: v.string(), keySecret: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ message: "Forbidden", code: "FORBIDDEN" });
-    }
+    await requireAdmin(ctx);
 
     if (!args.keyId.startsWith("rzp_")) {
       throw new ConvexError({ message: "Key ID must start with 'rzp_'", code: "BAD_REQUEST" });
@@ -177,15 +160,7 @@ export const getReviewEmailEnabled = internalQuery({
 export const getReviewEmailSettings = query({
   args: {},
   handler: async (ctx): Promise<{ enabled: boolean; delayDays: number }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { enabled: true, delayDays: 3 };
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      return { enabled: true, delayDays: 3 };
-    }
+    await requireAdmin(ctx);
     const [enabledRow, delayRow] = await Promise.all([
       ctx.db.query("settings").withIndex("by_key", (q) => q.eq("key", "review_email_enabled")).unique(),
       ctx.db.query("settings").withIndex("by_key", (q) => q.eq("key", "review_request_delay_days")).unique(),
@@ -200,15 +175,7 @@ export const getReviewEmailSettings = query({
 export const setReviewEmailSettings = mutation({
   args: { enabled: v.boolean(), delayDays: v.number() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
     if (!Number.isInteger(args.delayDays) || args.delayDays < 0 || args.delayDays > 365) {
       throw new ConvexError({ code: "BAD_REQUEST", message: "Delay must be between 0 and 365 days" });
     }
@@ -285,6 +252,7 @@ export const getReviewSettings = query({
     aiPolishEnabled: boolean;
     showEmptySection: boolean;
   }> => {
+    await requireAdmin(ctx);
     const keys = [
       "review_min_length",
       "review_approval_mode",
@@ -315,15 +283,7 @@ export const setReviewSettings = mutation({
     showEmptySection: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
     if (!Number.isInteger(args.minLength) || args.minLength < 1 || args.minLength > 500) {
       throw new ConvexError({ code: "BAD_REQUEST", message: "Min length must be between 1 and 500" });
     }
@@ -394,15 +354,7 @@ export const setTrustBadgeSettings = mutation({
     showBuyerCount: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
     if (!Number.isInteger(args.moneyBackDays) || args.moneyBackDays < 1 || args.moneyBackDays > 365) {
       throw new ConvexError({ code: "BAD_REQUEST", message: "Money-back days must be 1–365" });
     }
@@ -425,16 +377,7 @@ export const setTrustBadgeSettings = mutation({
 export const getRazorpayConfig = query({
   args: {},
   handler: async (ctx): Promise<{ keyId: string | null; hasSecret: boolean; mode: "test" | "live" | "none" }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { keyId: null, hasSecret: false, mode: "none" };
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      return { keyId: null, hasSecret: false, mode: "none" };
-    }
+    await requireAdmin(ctx);
 
     const [keyIdRow, keySecretRow] = await Promise.all([
       ctx.db.query("settings").withIndex("by_key", (q) => q.eq("key", "razorpay_key_id")).unique(),

@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { ConvexError } from "convex/values";
+import { requireAdmin } from "./users";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -137,15 +137,7 @@ export const setSettings = mutation({
     maxPerSession:    v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
 
     const upsert = async (key: string, value: string) => {
       const existing = await ctx.db.query("settings").withIndex("by_key", (q) => q.eq("key", key)).unique();

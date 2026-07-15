@@ -4,6 +4,7 @@
 import { action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
+import { requireAdminAction } from "./users";
 import OpenAI from "openai";
 
 function getOpenAI() {
@@ -25,9 +26,7 @@ type PolishResult = {
 export const polishReview = action({
   args: { reviewId: v.id("reviews") },
   handler: async (ctx, args): Promise<PolishResult> => {
-    // Auth check
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
+    await requireAdminAction(ctx);
 
     // Check if AI polish is enabled
     const aiEnabled = await ctx.runQuery(internal.settings.getAiPolishEnabled, {});

@@ -4,6 +4,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
+import { requireAdminAction } from "./users";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import Razorpay from "razorpay";
@@ -187,6 +188,7 @@ export const verifyAccessOtp = action({
 export const resendDeliveryEmail = action({
   args: { orderId: v.id("orders") },
   handler: async (ctx, args): Promise<{ sent: boolean }> => {
+    await requireAdminAction(ctx);
     await ctx.runAction(internal.email.sendDeliveryEmailByOrderId, {
       orderId: args.orderId,
     });

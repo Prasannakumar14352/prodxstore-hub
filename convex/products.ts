@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel";
+import { requireAdmin } from "./users";
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
@@ -98,8 +99,7 @@ export const setUpsells = mutation({
     upsellProductIds: v.array(v.id("products")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not signed in." });
+    await requireAdmin(ctx);
     await ctx.db.patch(args.productId, { upsellProductIds: args.upsellProductIds });
   },
 });
@@ -123,6 +123,7 @@ const productFields = {
 export const create = mutation({
   args: productFields,
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     // Check slug uniqueness
     const existing = await ctx.db
       .query("products")
@@ -138,6 +139,7 @@ export const create = mutation({
 export const update = mutation({
   args: { id: v.id("products"), ...productFields },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const { id, ...fields } = args;
     // Check slug uniqueness for other products
     const existing = await ctx.db
@@ -154,6 +156,7 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("products") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const product = await ctx.db.get(args.id);
     if (!product) throw new ConvexError({ code: "NOT_FOUND", message: "Product not found." });
     await ctx.db.delete(args.id);
@@ -165,6 +168,7 @@ export const remove = mutation({
 export const seed = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     const existing = await ctx.db.query("products").first();
     if (existing) return; // already seeded
 

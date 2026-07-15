@@ -5,14 +5,14 @@ import {
 } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { requireAdmin } from "./users";
 
 // ─── Admin: list all affiliates ──────────────────────────────────────────────
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not signed in." });
+    await requireAdmin(ctx);
     return await ctx.db.query("affiliates").collect();
   },
 });
@@ -29,8 +29,7 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not signed in." });
+    await requireAdmin(ctx);
 
     const code = args.code.toLowerCase().trim().replace(/[^a-z0-9-_]/g, "");
     if (!code) throw new ConvexError({ code: "BAD_REQUEST", message: "Invalid affiliate code." });
@@ -74,8 +73,7 @@ export const upsert = mutation({
 export const toggleEnabled = mutation({
   args: { id: v.id("affiliates") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not signed in." });
+    await requireAdmin(ctx);
     const aff = await ctx.db.get(args.id);
     if (!aff) throw new ConvexError({ code: "NOT_FOUND", message: "Affiliate not found." });
     await ctx.db.patch(args.id, { enabled: !aff.enabled });
@@ -87,8 +85,7 @@ export const toggleEnabled = mutation({
 export const remove = mutation({
   args: { id: v.id("affiliates") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not signed in." });
+    await requireAdmin(ctx);
     await ctx.db.delete(args.id);
   },
 });
@@ -98,8 +95,7 @@ export const remove = mutation({
 export const resetStats = mutation({
   args: { id: v.id("affiliates") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not signed in." });
+    await requireAdmin(ctx);
     await ctx.db.patch(args.id, { visits: 0, conversions: 0, revenueInr: 0 });
   },
 });

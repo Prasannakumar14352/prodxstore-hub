@@ -3,6 +3,7 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { requireAdminAction } from "./users";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -22,8 +23,7 @@ export const generateForProduct = action({
     count: v.number(), // how many per type
   },
   handler: async (ctx, args): Promise<{ generated: number }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
+    await requireAdminAction(ctx);
 
     let generated = 0;
 

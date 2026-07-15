@@ -2,8 +2,8 @@
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { currentUser, requireAdmin } from "./users";
 
 // ─── Helper: generate a unique hex token ──────────────────────────────────────
 
@@ -48,21 +48,6 @@ function toPublicReview(r: Doc<"reviews">, mediaUrls?: (string | null)[]): Publi
     mediaTypes: r.mediaTypes,
     mediaLabels: r.mediaLabels,
   };
-}
-
-// ─── Helper: require admin identity ──────────────────────────────────────────
-
-async function assertAdmin(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-  }
-  return user;
 }
 
 // ─── Query: reviews for a product (public) ────────────────────────────────────
@@ -175,7 +160,7 @@ export const adminList = query({
     ),
   },
   handler: async (ctx, args): Promise<Doc<"reviews">[]> => {
-    await assertAdmin(ctx);
+    await requireAdmin(ctx);
     const all = await ctx.db.query("reviews").order("desc").take(500);
     const filter = args.statusFilter ?? "all";
     if (filter === "all") return all;
@@ -188,12 +173,7 @@ export const adminList = query({
 export const pendingCount = query({
   args: {},
   handler: async (ctx): Promise<number> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return 0;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
+    const user = await currentUser(ctx);
     if (!user || (user.role !== "admin" && user.role !== "super_admin")) return 0;
     const rows = await ctx.db
       .query("reviews")
@@ -323,7 +303,7 @@ export const adminSetStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await assertAdmin(ctx);
+    await requireAdmin(ctx);
     await ctx.db.patch(args.reviewId, { status: args.status });
   },
 });
@@ -333,7 +313,7 @@ export const adminSetStatus = mutation({
 export const adminToggleFeatured = mutation({
   args: { reviewId: v.id("reviews") },
   handler: async (ctx, args) => {
-    await assertAdmin(ctx);
+    await requireAdmin(ctx);
     const review = await ctx.db.get(args.reviewId);
     if (!review) throw new ConvexError({ code: "NOT_FOUND", message: "Review not found." });
     await ctx.db.patch(args.reviewId, { isFeatured: !(review.isFeatured ?? false) });
@@ -345,7 +325,7 @@ export const adminToggleFeatured = mutation({
 export const adminDelete = mutation({
   args: { reviewId: v.id("reviews") },
   handler: async (ctx, args) => {
-    await assertAdmin(ctx);
+    await requireAdmin(ctx);
     // Delete media files from storage too
     const review = await ctx.db.get(args.reviewId);
     if (review?.mediaStorageIds?.length) {
@@ -362,7 +342,7 @@ export const adminDelete = mutation({
 export const adminGetMediaUrls = query({
   args: { reviewId: v.id("reviews") },
   handler: async (ctx, args): Promise<string[]> => {
-    await assertAdmin(ctx);
+    await requireAdmin(ctx);
     const review = await ctx.db.get(args.reviewId);
     if (!review?.mediaStorageIds?.length) return [];
     const urls = await Promise.all(

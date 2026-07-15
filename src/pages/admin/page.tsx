@@ -6,7 +6,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { DbProduct } from "@/lib/product-visuals.ts";
 import { motion, AnimatePresence } from "motion/react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AiTestimonialsTab } from "./_components/ai-testimonials-tab.tsx";
 import {
   Plus,
@@ -54,8 +54,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import { useAuthActions } from "@/hooks/use-auth.ts";
 import ImageUploader from "./_components/image-uploader.tsx";
 import MultiImageUploader from "./_components/multi-image-uploader.tsx";
 import ReviewsTab from "./_components/reviews-tab.tsx";
@@ -1743,81 +1742,6 @@ function OrdersTab() {
   );
 }
 
-// ─── 403 page ─────────────────────────────────────────────────────────────────
-
-function ForbiddenPage() {
-  const bootstrapAdmin = useMutation(api.users.bootstrapAdmin);
-  const adminExists = useQuery(api.users.adminExists);
-  const [claiming, setClaiming] = useState(false);
-
-  const handleClaim = async () => {
-    setClaiming(true);
-    try {
-      await bootstrapAdmin();
-      toast.success("You are now super_admin — refreshing…");
-      setTimeout(() => window.location.reload(), 800);
-    } catch (err) {
-      if (err instanceof ConvexError) {
-        const { message } = err.data as { message: string };
-        toast.error(message);
-      } else {
-        toast.error("Failed to claim admin");
-      }
-      setClaiming(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-      <div className="text-center px-6">
-        <div className="w-16 h-16 rounded-2xl border border-destructive/20 bg-destructive/10 flex items-center justify-center mx-auto mb-4">
-          <ShoppingBag className="w-7 h-7 text-destructive" />
-        </div>
-        <p className="text-xs uppercase tracking-widest text-destructive font-medium mb-2">403 Forbidden</p>
-        <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
-        <p className="text-muted-foreground text-sm mb-6">
-          {adminExists
-            ? "You don't have admin privileges. Contact the store owner."
-            : "No admin has been set up yet."}
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button asChild variant="secondary" className="rounded-full">
-            <Link to="/">Back to store</Link>
-          </Button>
-          {adminExists === false && (
-            <Button className="rounded-full" onClick={handleClaim} disabled={claiming}>
-              {claiming ? "Claiming…" : "Claim Admin (first setup)"}
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Admin Gate (role check) ─────────────────────────────────────────────────
-
-function AdminGate() {
-  const user = useQuery(api.users.getCurrentUser);
-
-  if (user === undefined) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin inline-block" />
-          <p className="text-muted-foreground text-sm mt-3">Loading…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-    return <ForbiddenPage />;
-  }
-
-  return <AdminContent />;
-}
-
 // ─── Admin Content ─────────────────────────────────────────────────────────────
 
 // Tab bar with pending-reviews badge (must use hooks, so a separate component)
@@ -1868,7 +1792,9 @@ function AdminTabBar({
   );
 }
 
-function AdminContent() {
+export function AdminContent() {
+  const { signOut } = useAuthActions();
+  const navigate = useNavigate();
   const products = useQuery(api.products.list);
   const seed = useMutation(api.products.seed);
   const [tab, setTab] = useState<"products" | "orders" | "reviews" | "testimonials" | "analytics" | "coupons" | "affiliates" | "settings">("products");
@@ -1918,6 +1844,17 @@ function AdminContent() {
                 <Plus className="w-3.5 h-3.5" /> New product
               </Button>
             )}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="rounded-full text-xs gap-1.5"
+              onClick={async () => {
+                await signOut();
+                navigate("/admin", { replace: true });
+              }}
+            >
+              Sign out
+            </Button>
           </div>
         </div>
 
@@ -1999,37 +1936,5 @@ function AdminContent() {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-// ─── Page (with auth guard) ────────────────────────────────────────────────────
-
-export default function AdminPage() {
-  return (
-    <>
-      <AuthLoading>
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-center">
-            <span className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin inline-block" />
-            <p className="text-muted-foreground text-sm mt-3">Loading…</p>
-          </div>
-        </div>
-      </AuthLoading>
-      <Unauthenticated>
-        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-          <div className="text-center px-6">
-            <div className="w-16 h-16 rounded-2xl border border-primary/20 bg-primary/10 flex items-center justify-center mx-auto mb-5">
-              <Package className="w-7 h-7 text-primary" />
-            </div>
-            <h1 className="text-2xl font-bold mb-2">Admin Login</h1>
-            <p className="text-muted-foreground text-sm mb-6">Sign in to access the admin panel.</p>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-      <Authenticated>
-        <AdminGate />
-      </Authenticated>
-    </>
   );
 }

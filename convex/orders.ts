@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import { requireAdmin } from "./users";
 
 // ─── Helper: generate order number ───────────────────────────────────────────
 
@@ -173,16 +174,7 @@ export const getOrderByToken = query({
 export const listOrders = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
 
     return await ctx.db.query("orders").order("desc").take(200);
   },
@@ -193,15 +185,7 @@ export const listOrders = query({
 export const updateNotes = mutation({
   args: { orderId: v.id("orders"), notes: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
     await ctx.db.patch(args.orderId, { internalNotes: args.notes });
   },
 });
@@ -211,15 +195,7 @@ export const updateNotes = mutation({
 export const deleteOrder = mutation({
   args: { orderId: v.id("orders") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
     // Delete associated tokens
     const tokens = await ctx.db
       .query("purchaseTokens")
@@ -371,15 +347,7 @@ export const exportOrdersCsv = query({
     downloads: number;
     razorpayOrderId: string;
   }>> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+    await requireAdmin(ctx);
 
     const filterStatus = args.status ?? "all";
     let rows: Doc<"orders">[];

@@ -2,6 +2,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { requireAdmin } from "./users";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export const listActive = query({
 export const listByProduct = query({
   args: { productId: v.id("products") },
   handler: async (ctx, args): Promise<Doc<"aiTestimonials">[]> => {
+    await requireAdmin(ctx);
     return await ctx.db
       .query("aiTestimonials")
       .withIndex("by_product", (q) => q.eq("productId", args.productId))
@@ -30,8 +32,7 @@ export const listByProduct = query({
 export const remove = mutation({
   args: { id: v.id("aiTestimonials") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
+    await requireAdmin(ctx);
     await ctx.db.delete(args.id);
   },
 });
@@ -39,8 +40,7 @@ export const remove = mutation({
 export const toggleStatus = mutation({
   args: { id: v.id("aiTestimonials") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
+    await requireAdmin(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Not found");
     await ctx.db.patch(args.id, {

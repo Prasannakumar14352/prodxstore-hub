@@ -1,20 +1,7 @@
 // Coupons backend — V8 runtime
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
-
-async function requireAdmin(ctx: MutationCtx | QueryCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-    .unique();
-  if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
-  }
-  return user;
-}
+import { requireAdmin } from "./users";
 
 // ── Public: list active/valid coupons for display at checkout ─────────────────
 // Only returns coupons that are enabled, not expired, and not usage-exhausted

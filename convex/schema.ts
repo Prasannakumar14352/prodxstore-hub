@@ -1,16 +1,23 @@
+import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  ...authTables,
+
   // ─── Users ────────────────────────────────────────────────────────────────
+  // Extends Convex Auth's built-in `users` table (id, name, email, ...) with
+  // an admin role. Absent role = regular authenticated user, no admin access.
   users: defineTable({
-    tokenIdentifier: v.string(),
     name: v.optional(v.string()),
     email: v.optional(v.string()),
-    role: v.optional(
-      v.union(v.literal("user"), v.literal("admin"), v.literal("super_admin"))
-    ),
-  }).index("by_token", ["tokenIdentifier"]),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    image: v.optional(v.string()),
+    isAnonymous: v.optional(v.boolean()),
+    role: v.optional(v.union(v.literal("admin"), v.literal("super_admin"))),
+  }).index("email", ["email"]),
 
   // ─── Products ─────────────────────────────────────────────────────────────
   products: defineTable({

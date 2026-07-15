@@ -1,11 +1,12 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
-import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
 import ProductPage from "./pages/product/page.tsx";
 import CheckoutPage from "./pages/checkout/page.tsx";
 import ThankYouPage from "./pages/thank-you/page.tsx";
-import AdminPage from "./pages/admin/page.tsx";
+import AdminLoginPage from "./pages/admin/login.tsx";
+import AdminDashboardPage from "./pages/admin/dashboard.tsx";
+import AdminUnauthorizedPage from "./pages/admin/unauthorized.tsx";
 import AccessPurchasePage from "./pages/access-purchase/page.tsx";
 import RefPage from "./pages/ref/page.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -43,8 +44,13 @@ export default function App() {
                 } />
                 <Route path="/access-purchase" element={<AccessPurchasePage />} />
                 <Route path="/ref/:code" element={<RefPage />} />
-                <Route path="/admin" element={<AdminPage />} />
-                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/admin" element={<AdminLoginPage />} />
+                <Route path="/admin/dashboard" element={
+                  <ErrorBoundary context="the admin dashboard">
+                    <AdminDashboardPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/admin/unauthorized" element={<AdminUnauthorizedPage />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
