@@ -4,8 +4,8 @@
  */
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMutation } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import { Loader2 } from "lucide-react";
 
 export const AFFILIATE_CODE_KEY = "pxs_affiliate_code";

@@ -1,6 +1,6 @@
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useAuthActions } from "@/lib/api/hooks.ts";
+import { useConvexAuth, useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 
 export { useAuthActions };
 

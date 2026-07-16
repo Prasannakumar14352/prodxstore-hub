@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMutation } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import { Upload, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
@@ -14,8 +14,7 @@ type Props = {
 };
 
 export default function ImageUploader({ value, onChange, label, hint, error }: Props) {
-  const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
-  const resolveStorageUrl = useMutation(api.storage.resolveStorageUrl);
+  const uploadProductImage = useMutation(api.storage.uploadProductImage);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,16 +30,7 @@ export default function ImageUploader({ value, onChange, label, hint, error }: P
     }
     setUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl();
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { storageId } = await res.json() as { storageId: string };
-      // Resolve storageId → permanent public serving URL via backend
-      const publicUrl = await resolveStorageUrl({ storageId });
+      const publicUrl = await uploadProductImage({ file });
       onChange(publicUrl);
       toast.success("Image uploaded");
     } catch {

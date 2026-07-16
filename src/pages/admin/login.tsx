@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type React from "react";
 import { useNavigate } from "react-router-dom";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth } from "@/lib/api/hooks.ts";
 import { Package, Loader2 } from "lucide-react";
 import { useAuthActions, useCurrentUser } from "@/hooks/use-auth.ts";
 import { Button } from "@/components/ui/button.tsx";

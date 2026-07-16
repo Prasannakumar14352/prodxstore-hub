@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Doc, Id } from "@/lib/api/types.ts";
 import { Star, MessageCircle, Mail, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 

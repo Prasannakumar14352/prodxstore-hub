@@ -1,4 +1,4 @@
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc } from "@/lib/api/types.ts";
 
 // The database product type — used across storefront and admin
 export type DbProduct = Doc<"products">;

@@ -27,8 +27,8 @@ import { cn } from "@/lib/utils.ts";
 import { useExchangeRate } from "@/hooks/use-exchange-rate.ts";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useAction, useConvex, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useAction, useConvex, useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import TrustBadges from "@/components/trust-badges.tsx";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

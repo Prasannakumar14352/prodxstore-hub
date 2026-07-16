@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
 import type React from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel";
-import type { Doc } from "@/convex/_generated/dataModel";
+import { useQuery, useMutation, useAction } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Id } from "@/lib/api/types.ts";
+import type { Doc } from "@/lib/api/types.ts";
 import type { DbProduct } from "@/lib/product-visuals.ts";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
@@ -53,7 +53,7 @@ import { Label } from "@/components/ui/label.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import { toast } from "sonner";
-import { ConvexError } from "convex/values";
+import { ConvexError } from "@/lib/api/values.ts";
 import { useAuthActions } from "@/hooks/use-auth.ts";
 import ImageUploader from "./_components/image-uploader.tsx";
 import MultiImageUploader from "./_components/multi-image-uploader.tsx";
@@ -855,7 +855,7 @@ function DeliveryAssetFormPanel({
   onClose: () => void;
 }) {
   const upsert = useMutation(api.deliveryAssets.upsert);
-  const generateUploadUrl = useMutation(api.deliveryAssets.generateUploadUrl);
+  const uploadDeliveryFile = useMutation(api.deliveryAssets.uploadFile);
   const [form, setForm] = useState<DeliveryAssetForm>({
     id: initial?._id,
     name: initial?.name ?? "",
@@ -882,14 +882,7 @@ function DeliveryAssetFormPanel({
     }
     setUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl();
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { storageId: sid } = await res.json() as { storageId: string };
+      const sid = await uploadDeliveryFile({ file });
       setStorageId(sid);
       setFileName(file.name);
       // Clear any manual URL since the file is now in storage

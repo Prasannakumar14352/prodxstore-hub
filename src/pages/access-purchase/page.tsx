@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { useAction } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useAction } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import { Mail, Hash, Lock, ArrowRight, ShieldCheck, Package } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { toast } from "sonner";
-import { ConvexError } from "convex/values";
+import { ConvexError } from "@/lib/api/values.ts";
 import { useNavigate } from "react-router-dom";
 
 export default function AccessPurchasePage() {

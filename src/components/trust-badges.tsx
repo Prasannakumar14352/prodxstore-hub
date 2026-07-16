@@ -2,9 +2,9 @@
  * Reusable trust badges used on product pages and checkout.
  * Reads settings from Convex and renders only enabled badges.
  */
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel";
+import { useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Id } from "@/lib/api/types.ts";
 import { Lock, Download, RefreshCcw, Users, ShieldCheck, Zap } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { motion } from "motion/react";

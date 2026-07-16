@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useQuery, useMutation, useAction } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Doc, Id } from "@/lib/api/types.ts";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Star,
@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import { toast } from "sonner";
-import { ConvexError } from "convex/values";
+import { ConvexError } from "@/lib/api/values.ts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

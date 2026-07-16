@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { Authenticated } from "convex/react";
+import { useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import { Authenticated } from "@/lib/api/hooks.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
@@ -310,7 +310,7 @@ function DataExportPanelInner() {
             <p className="text-xs text-muted-foreground">
               Export all tables as JSON, then import them in the Convex Dashboard
               (Data tab) or via{" "}
-              <code className="font-mono bg-white/6 px-1 rounded">npx convex import</code>.
+              <code className="font-mono bg-white/6 px-1 rounded">the Supabase Table Editor import</code>.
               See <code className="font-mono bg-white/6 px-1 rounded">docs/MIGRATION.md</code> in
               the codebase for the complete deployment guide.
             </p>

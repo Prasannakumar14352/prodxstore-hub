@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import { useExchangeRate } from "@/hooks/use-exchange-rate.ts";
 import ReviewForm from "./_components/review-form.tsx";
 import UpsellSection from "./_components/upsell-section.tsx";

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel";
+import { useMutation, useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Id } from "@/lib/api/types.ts";
 import {
   Star,
   CheckCircle,

@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useMutation } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import { Upload, X, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
@@ -13,8 +13,7 @@ type Props = {
 };
 
 export default function MultiImageUploader({ value, onChange, label, hint }: Props) {
-  const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
-  const resolveStorageUrl = useMutation(api.storage.resolveStorageUrl);
+  const uploadProductImage = useMutation(api.storage.uploadProductImage);
   // Track count of in-flight uploads so spinner stays while any are pending
   const [uploadingCount, setUploadingCount] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -40,15 +39,7 @@ export default function MultiImageUploader({ value, onChange, label, hint }: Pro
     }
     setUploadingCount((c) => c + 1);
     try {
-      const uploadUrl = await generateUploadUrl();
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { storageId } = await res.json() as { storageId: string };
-      const publicUrl = await resolveStorageUrl({ storageId });
+      const publicUrl = await uploadProductImage({ file });
       // Always append to the latest list via the ref so concurrent uploads all land
       setUrls([...urlsRef.current, publicUrl]);
       toast.success(`"${file.name}" uploaded`);
@@ -57,7 +48,7 @@ export default function MultiImageUploader({ value, onChange, label, hint }: Pro
     } finally {
       setUploadingCount((c) => c - 1);
     }
-  }, [generateUploadUrl, resolveStorageUrl, setUrls]);
+  }, [uploadProductImage, setUrls]);
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;

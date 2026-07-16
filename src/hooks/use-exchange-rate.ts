@@ -1,6 +1,6 @@
 import { useQuery as useTanstackQuery } from "@tanstack/react-query";
-import { useQuery as useConvexQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useQuery as useConvexQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 
 type ExchangeRateResult = {
   rate: number | null;

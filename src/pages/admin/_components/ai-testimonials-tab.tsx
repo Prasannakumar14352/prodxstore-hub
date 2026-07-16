@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useQuery, useMutation, useAction } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Doc, Id } from "@/lib/api/types.ts";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Sparkles,

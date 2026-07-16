@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel";
-import { ConvexError } from "convex/values";
+import { useMutation, useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Id } from "@/lib/api/types.ts";
+import { ConvexError } from "@/lib/api/values.ts";
 import {
   Star,
   PenLine,
@@ -128,7 +128,7 @@ export default function ReviewForm({
 }: ReviewFormProps) {
   const allProducts = useQuery(api.products.list);
   const submit = useMutation(api.reviews.submit);
-  const generateUploadUrl = useMutation(api.storage.generateReviewMediaUploadUrl);
+  const uploadReviewMedia = useMutation(api.storage.uploadReviewMedia);
 
   const [open, setOpen] = useState(false);
   const [activeProduct, setActiveProduct] = useState<Id<"products">>(productIds[0]);
@@ -168,7 +168,7 @@ export default function ReviewForm({
     resetFields();
   };
 
-  // ── Upload a single file to Convex storage ──────────────────────────────────
+  // ── Upload a single file to Supabase Storage ────────────────────────────────
 
   const uploadFile = async (file: File, idx: number) => {
     // Mark as uploading
@@ -177,14 +177,7 @@ export default function ReviewForm({
     );
 
     try {
-      const uploadUrl = await generateUploadUrl({ orderToken });
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { storageId } = await res.json() as { storageId: Id<"_storage"> };
+      const storageId = await uploadReviewMedia({ file });
 
       setMediaFiles((prev) =>
         prev.map((m, i) => (i === idx ? { ...m, uploading: false, storageId } : m))

@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { SocialProofNotification, SocialProofSettings } from "@/convex/socialProof.ts";
+import { useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { SocialProofNotification, SocialProofSettings } from "@/lib/api/types.ts";
 
 // ─── Demo data (only shown when demoMode is enabled by admin) ─────────────────
 

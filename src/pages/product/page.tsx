@@ -10,8 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useQuery } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
 import { getVisuals, getBadgeColor } from "@/lib/product-visuals.ts";
 import { useCart } from "@/hooks/use-cart.tsx";
 import { WishlistToggle } from "@/components/wishlist-button.tsx";

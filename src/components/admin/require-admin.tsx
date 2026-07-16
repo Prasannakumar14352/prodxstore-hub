@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth } from "@/lib/api/hooks.ts";
 import { useCurrentUser } from "@/hooks/use-auth.ts";
 import { Spinner } from "@/components/ui/spinner.tsx";
 

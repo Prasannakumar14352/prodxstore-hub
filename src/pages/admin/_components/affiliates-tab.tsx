@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useQuery, useMutation } from "@/lib/api/hooks.ts";
+import { api } from "@/lib/api/index.ts";
+import type { Doc, Id } from "@/lib/api/types.ts";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Pencil, Trash2, ToggleLeft, ToggleRight,
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { cn } from "@/lib/utils.ts";
 import { toast } from "sonner";
-import { ConvexError } from "convex/values";
+import { ConvexError } from "@/lib/api/values.ts";
 
 type Affiliate = Doc<"affiliates">;
 
