@@ -3,7 +3,12 @@
 // OPENAI_MODEL). Admin-only: verifies the caller's JWT belongs to an admin.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json, serviceClient } from "../_shared/utils.ts";
-
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 async function requireAdmin(req: Request): Promise<boolean> {
   const auth = req.headers.get("Authorization") ?? "";
   const anon = createClient(

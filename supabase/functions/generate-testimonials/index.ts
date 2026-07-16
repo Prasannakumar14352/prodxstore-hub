@@ -1,3 +1,4 @@
+
 // Stub for the former convex/aiTestimonialsGen.ts → generateForProduct.
 //
 // The original feature generated fictional customer reviews, WhatsApp chats,
@@ -10,6 +11,13 @@
 // can be managed (hidden/deleted) from the admin panel. Real customer reviews
 // collected via the review-request email flow are a compliant replacement.
 import { corsHeaders, json } from "../_shared/utils.ts";
+
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 
 Deno.serve((req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

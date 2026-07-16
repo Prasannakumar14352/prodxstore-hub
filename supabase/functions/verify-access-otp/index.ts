@@ -1,5 +1,11 @@
 // Replaces convex/razorpay.ts → verifyAccessOtp.
 import { corsHeaders, json, serviceClient, sha256Hex } from "../_shared/utils.ts";
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

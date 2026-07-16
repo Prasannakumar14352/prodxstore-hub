@@ -3,7 +3,12 @@
 import {
   corsHeaders, json, serviceClient, sendEmail, escapeHtml, siteUrl,
 } from "../_shared/utils.ts";
-
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {

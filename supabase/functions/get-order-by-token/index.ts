@@ -1,7 +1,12 @@
 // Replaces convex/orders.ts → getOrderByToken (thank-you & re-access pages).
 // Returns the paid order + delivery assets with signed download URLs.
 import { corsHeaders, json, serviceClient, resolveAssets } from "../_shared/utils.ts";
-
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {

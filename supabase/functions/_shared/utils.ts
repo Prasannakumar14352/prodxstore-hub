@@ -1,5 +1,5 @@
 // Shared helpers for ProdXStore Edge Functions (Deno runtime).
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +12,12 @@ export function json(body: unknown, status = 200): Response {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
 
 /** Service-role client — bypasses RLS. Never expose to the browser. */
 export function serviceClient(): SupabaseClient {
