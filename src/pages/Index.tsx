@@ -29,7 +29,7 @@ import {
 import { useDebounce } from "@/hooks/use-debounce.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { cn } from "@/lib/utils.ts";
+import { cn, isExternalProductUrl, normalizeExternalUrl } from "@/lib/utils.ts";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useQuery } from "@/lib/api/hooks.ts";
 import { api } from "@/lib/api/index.ts";
@@ -107,6 +107,14 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
   const { icon: Icon, gradient, accentColor, borderGlow } = getVisuals(product.category);
   const { addItem, items } = useCart();
   const inCart = items.some((i) => i.product._id === product._id);
+  const isExternal = isExternalProductUrl(product.slug);
+  const productHref = isExternal ? "#" : `/product/${product.slug}`;
+
+  const handleOpenProduct = (e: React.MouseEvent) => {
+    if (!isExternal) return;
+    e.preventDefault();
+    window.open(normalizeExternalUrl(product.slug), "_blank", "noopener,noreferrer");
+  };
 
   return (
     <motion.div
@@ -120,7 +128,7 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
       )}
     >
       {/* Clickable image area → product page */}
-      <Link to={`/product/${product.slug}`} className="block">
+      <Link to={productHref} onClick={handleOpenProduct} className="block">
         <div className="relative h-44 overflow-hidden">
           <img
             src={product.image}
@@ -153,7 +161,7 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
             {product.category}
           </span>
         </div>
-        <Link to={`/product/${product.slug}`}>
+        <Link to={productHref} onClick={handleOpenProduct}>
           <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
             {product.name}
           </h3>
@@ -189,7 +197,7 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
               <ShoppingCart className="w-3.5 h-3.5" />
             </button>
             <Button size="sm" className="rounded-full text-xs gap-1.5 cursor-pointer" asChild>
-              <Link to={`/product/${product.slug}`}>
+              <Link to={productHref} onClick={handleOpenProduct}>
                 View <ArrowRight className="w-3 h-3" />
               </Link>
             </Button>

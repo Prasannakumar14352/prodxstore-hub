@@ -1,7 +1,13 @@
-# ProdXStore — Migration & Deployment Guide
+# ProdXStore — Architecture & Deployment Guide
 
-This document covers everything needed to run ProdXStore outside of the
-Hercules platform — on your own infrastructure using Vercel + Convex.
+This document covers everything needed to run ProdXStore on your own
+infrastructure using Vercel + Supabase. The backend runs entirely on
+Supabase: Postgres (with Row Level Security), Supabase Auth, Supabase
+Storage, and Edge Functions.
+
+> For the history of how this app moved off Convex/Hercules onto Supabase,
+> see [`SUPABASE_MIGRATION.md`](./SUPABASE_MIGRATION.md). This document
+> describes the app as it exists today.
 
 ---
 
@@ -13,7 +19,7 @@ Hercules platform — on your own infrastructure using Vercel + Convex.
 | React | 19 |
 | Vite | 7 |
 | TypeScript | 5.9 |
-| Convex | 1.42 |
+| @supabase/supabase-js | 2.49 |
 | React Router | 7 (declarative / SPA mode) |
 | Tailwind CSS | 4 |
 
@@ -25,108 +31,76 @@ Hercules platform — on your own infrastructure using Vercel + Convex.
 npm install
 ```
 
-> Uses `pnpm` in the Hercules environment. Outside Hercules, `npm` or `pnpm`
-> both work. The lockfile is `pnpm-lock.yaml` — if using `npm`, delete it and
-> run `npm install` to generate `package-lock.json`.
-
 ---
 
-## 2. Hercules-Specific Packages to Replace
+## 2. Local Development Setup
 
-These packages are Hercules platform packages. They work on Hercules but will
-not resolve outside it without substitutes.
+### Step 1 — Create a Supabase project
 
-| Package | Used for | Replacement path |
-|---------|----------|-----------------|
-| `@usehercules/auth` | OIDC auth hooks (`useAuth`, `signinRedirect`) | Any OIDC-compatible library: `react-oidc-context` directly, Clerk, Auth0, WorkOS |
-| `@usehercules/sdk` | Email sending (`hercules.email.send`) in `convex/email.ts` | Resend, SendGrid, Postmark, Nodemailer |
-| `@usehercules/vite` | Vite plugin (HMR, proxy) in `vite.config.ts` | Remove the plugin; standard Vite works fine |
+1. Create a project at https://supabase.com/dashboard.
+2. Install the CLI (`npm i -g supabase`), then from the repo root:
+   ```bash
+   supabase login
+   supabase link --project-ref <YOUR_PROJECT_REF>
+   supabase db push
+   ```
+   (Or paste `supabase/migrations/00001_schema.sql` into the SQL Editor.)
+3. For the review-request email scheduler, edit
+   `supabase/migrations/00002_cron.sql` — replace `<PROJECT_REF>` and
+   `<SERVICE_ROLE_KEY>` — then run it in the SQL Editor.
 
-### Replacing `@usehercules/vite` (simplest step)
-
-In `vite.config.ts`, remove the import and the `hercules()` plugin call:
-
-```ts
-// BEFORE
-import hercules from "@usehercules/vite";
-plugins: [react(), tailwindcss(), hercules()],
-
-// AFTER
-plugins: [react(), tailwindcss()],
-```
-
-### Replacing `@usehercules/auth`
-
-`convex/auth.config.ts` uses `HERCULES_OIDC_AUTHORITY` and
-`HERCULES_OIDC_CLIENT_ID`. These map directly to any OIDC provider's
-`domain` and `applicationID`. Update them to your provider's values.
-
-The frontend hook at `src/hooks/use-auth.ts` re-exports from
-`@usehercules/auth/react`. Replace it with `react-oidc-context` or your
-chosen provider's React hooks.
-
-### Replacing `@usehercules/sdk` email
-
-In `convex/email.ts`, replace:
-
-```ts
-import { Hercules } from "@usehercules/sdk";
-const hercules = new Hercules({ apiKey: process.env.HERCULES_API_KEY! ... });
-await hercules.email.send({ from, to, subject, html, text });
-```
-
-With your provider. Example using Resend:
-
-```ts
-import { Resend } from "resend";
-const resend = new Resend(process.env.RESEND_API_KEY!);
-await resend.emails.send({ from, to, subject, html, text });
-```
-
----
-
-## 3. Local Development Setup
-
-### Step 1 — Create `.env.local`
+### Step 2 — Configure environment variables
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
-Fill in all values. See `.env.example` for descriptions.
+Fill in from **Project Settings → API**:
 
-### Step 2 — Connect Convex
+```
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key>
+```
 
-If using your existing Convex project:
+These are the only two variables the frontend needs. The anon key is safe to
+ship to the client — access control is enforced by Postgres Row Level
+Security, not by keeping this key secret.
+
+### Step 3 — Set Edge Function secrets
 
 ```bash
-npx convex dev --configure existing
+supabase secrets set \
+  RAZORPAY_KEY_ID=rzp_... \
+  RAZORPAY_KEY_SECRET=... \
+  RESEND_API_KEY=re_... \
+  EMAIL_FROM="ProdXStore <orders@yourdomain.com>" \
+  SITE_URL=https://yourdomain.com \
+  OPENAI_API_KEY=sk-...
 ```
 
-Select your project when prompted. This writes `CONVEX_DEPLOYMENT` to
-`.env.local` and starts the Convex dev server.
+Notes:
+- Razorpay keys can also be saved from **Admin → Settings → Razorpay**
+  (stored in the `settings` table); env secrets take priority.
+- Emails are sent via [Resend](https://resend.com). Without
+  `RESEND_API_KEY`, functions log and skip emails instead of failing.
+- AI review polish uses any OpenAI-compatible API (`OPENAI_BASE_URL` /
+  `OPENAI_MODEL` optional; defaults to OpenAI + `gpt-4o-mini`).
 
-To create a new Convex project:
+### Step 4 — Deploy the Edge Functions
 
 ```bash
-npx convex dev --configure new
+supabase functions deploy razorpay-create-order
+supabase functions deploy razorpay-verify-payment
+supabase functions deploy get-order-by-token
+supabase functions deploy send-access-otp
+supabase functions deploy verify-access-otp
+supabase functions deploy send-delivery-email
+supabase functions deploy process-review-emails
+supabase functions deploy polish-review
+supabase functions deploy generate-testimonials
 ```
 
-### Step 3 — Set Convex environment variables
-
-In the Convex Dashboard (`dashboard.convex.dev`):
-1. Open your project
-2. Go to **Settings → Environment Variables**
-3. Add:
-   - `HERCULES_OIDC_AUTHORITY` (or your OIDC authority URL)
-   - `HERCULES_OIDC_CLIENT_ID`
-   - `RAZORPAY_KEY_ID`
-   - `RAZORPAY_KEY_SECRET`
-   - `HERCULES_API_KEY` (or your email provider key)
-
-### Step 4 — Start the frontend
-
-In a second terminal:
+### Step 5 — Start the frontend
 
 ```bash
 npm run dev
@@ -136,219 +110,196 @@ The app runs at `http://localhost:5173`.
 
 ---
 
-## 4. Authentication Configuration
+## 3. Authentication
 
 ### How it works
 
-Authentication uses OpenID Connect (OIDC). The flow is:
+Authentication is Supabase Auth, email + password:
 
-1. User clicks Sign In → redirected to the OIDC provider
-2. Provider authenticates the user and redirects to `/auth/callback`
-3. `src/pages/auth/Callback.tsx` processes the callback and syncs the user
-   to the Convex `users` table via `api.users.updateCurrentUser`
-4. User's `tokenIdentifier` is stored as `{issuer}|{subject}` — this is the
-   stable, globally unique user identifier used throughout the backend
+1. User submits email/password on `/admin` (login) or a signup flow.
+2. `useAuthActions().signIn("password", { email, password, flow })` calls
+   `supabase.auth.signInWithPassword()` or `supabase.auth.signUp()`.
+3. A `public.profiles` row is auto-created for every new `auth.users` row via
+   the `handle_new_user()` trigger (`supabase/migrations/00001_schema.sql`).
+4. Session state is tracked via `supabase.auth.getSession()` +
+   `supabase.auth.onAuthStateChange()`, wrapped by `useConvexAuth()` in
+   `src/lib/api/hooks.ts` (the name is legacy — it is fully Supabase-backed).
+5. `useCurrentUser()` (`src/hooks/use-auth.ts`) joins the session to the
+   `profiles` row to get `name`/`email`/`role`.
 
-### On Hercules
+### Route protection
 
-- Authority: automatically set to `https://{app-id}.hercules-auth.com`
-- `convex/auth.config.ts` reads `HERCULES_OIDC_AUTHORITY` and
-  `HERCULES_OIDC_CLIENT_ID` from the Convex environment
-
-### On your own deployment
-
-Replace the authority/client values in Convex environment variables with
-your OIDC provider's values. The `convex/auth.config.ts` file does not need
-to change — it reads from environment variables.
-
-**Do not edit `src/pages/auth/Callback.tsx`**. It handles the OIDC callback
-and user sync. If you switch auth libraries, update `src/hooks/use-auth.ts`
-and `src/components/ui/signin.tsx` instead.
+`src/components/admin/require-admin.tsx` (`RequireAdmin`) wraps
+`/admin/dashboard`: unauthenticated users are redirected to `/admin`,
+authenticated non-admins to `/admin/unauthorized`.
 
 ### Admin role assignment
 
-User roles are stored in the `users` table (`role: "user" | "admin" | "super_admin"`).
-The first time you deploy to a new Convex project, assign yourself admin via
-the Convex Dashboard → Data → `users` table → find your record → set
-`role` to `"admin"`.
+Roles live in `public.profiles.role` (`admin` | `super_admin` | `null` for a
+regular user) and are **never trusted from the frontend** — every
+role-gated read/write is enforced in Postgres via the `security definer`
+functions `public.is_admin()` / `public.is_super_admin()`, which look up the
+role from `auth.uid()` server-side. Only a `super_admin` can change a
+profile's role (see the `"super admin manage roles"` RLS policy).
+
+To create your first admin:
+
+1. Supabase Dashboard → **Authentication → Users → Add user** (email +
+   password, auto-confirm), or sign up through the app.
+2. Grant the role in the SQL Editor:
+   ```sql
+   update public.profiles set role = 'super_admin' where email = 'you@example.com';
+   ```
+3. Log in at `/admin`.
 
 ---
 
-## 5. Razorpay Configuration
+## 4. Razorpay Configuration
 
-Razorpay keys are stored in two places (Convex DB takes priority over env vars):
+Razorpay keys are stored in two places (env secrets take priority):
 
-1. **Convex DB** — set via Admin → Settings → Razorpay in the app UI
-2. **Convex environment variables** — `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`
-   as a fallback
+1. **Edge Function secrets** — `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`
+   (see step 3 above)
+2. **`public.settings` table** — set via Admin → Settings → Razorpay in the
+   app UI, used as a fallback
 
-The backend (`convex/razorpay.ts`) calls `internal.settings.getRazorpayKeysInternal`
-which checks the DB first, then env vars.
-
-**The key secret is never sent to the frontend.** Only `keyId` is exposed
-(this is safe — it's the public identifier used in the Razorpay checkout popup).
+`supabase/functions/razorpay-create-order` and
+`supabase/functions/razorpay-verify-payment` handle order creation and HMAC
+signature verification. **The order amount is recomputed server-side from
+the `products` table** — it is never trusted from the client. The key
+secret never reaches the frontend; only `keyId` is exposed (safe — it's the
+public identifier used by the Razorpay checkout popup).
 
 For testing, use `rzp_test_*` keys. For production, use `rzp_live_*` keys.
 
 ---
 
-## 6. Email Configuration
+## 5. Email
 
-Delivery emails, OTP emails, and review request emails are sent from
-`convex/email.ts` via the Hercules SDK.
+Delivery emails, OTP emails, and review-request emails are sent via
+[Resend](https://resend.com) from the relevant Edge Functions
+(`send-delivery-email`, `send-access-otp`, `process-review-emails`). Review
+request emails are scheduled through the `scheduled_review_emails` table and
+a `pg_cron` job (`supabase/migrations/00002_cron.sql`) that invokes
+`process-review-emails` on a timer.
 
-### On your own deployment
-
-Replace the SDK call with your email provider. The `FROM` address and HTML
-template are defined in `convex/email.ts`. The `sendDeliveryEmailByOrderId`
-and `sendOtpEmail` internal actions are the main entry points.
-
-The `VITE_CONVEX_URL` variable is used to build the thank-you page link inside
-emails. Outside Hercules, set `VITE_APP_URL` to your production domain and
-update the URL construction logic in `sendDeliveryEmailByOrderId`.
+Set `EMAIL_FROM` and `SITE_URL` as Edge Function secrets — `SITE_URL` is
+used to build links (e.g. the thank-you page) inside outgoing emails.
 
 ---
 
-## 7. Convex File Storage
+## 6. File Storage
 
-Paid delivery files are stored in Convex File Storage (not public URLs).
-`convex/storage.ts` provides:
+Files are stored in Supabase Storage buckets (defined in
+`supabase/migrations/00001_schema.sql`):
 
-- `generateUploadUrl` — admin file upload
-- `generateReviewMediaUploadUrl` — buyer review media upload (gated by purchase token)
-- `resolveStorageUrl` / `getUrl` — generate time-limited serving URLs
+| Bucket | Public | Purpose |
+|--------|--------|---------|
+| `product-images` | Yes | Product photos/screenshots |
+| `review-media` | Yes | Buyer-uploaded review photos/videos |
+| `delivery-files` | No | Paid digital deliverables |
 
-Convex Storage works identically on any Convex deployment — no changes needed.
+`delivery-files` is private — buyers get time-limited access through the
+`get-order-by-token` Edge Function (gated by a purchase token), never
+through a direct client query. `product-images` and `delivery-files` writes
+require `public.is_admin()`; anyone can upload to `review-media` (guests
+leave reviews) but only admins can update/delete existing objects there.
 
 ---
 
-## 8. Production Deployment to Vercel
+## 7. Production Deployment to Vercel
 
 ### Step 1 — Vercel project setup
 
-1. Push the repo to GitHub
-2. Import it in Vercel
-3. Set build command and environment variables (see below)
+1. Push the repo to GitHub.
+2. Import it in Vercel.
+3. Build command: default (`npm run build`) — no special Vercel build step
+   is required; the Supabase project and its Edge Functions are deployed
+   independently via the Supabase CLI, not as part of the Vercel build.
 
-### Step 2 — Build command
-
-```
-npx convex deploy --cmd "npm run build"
-```
-
-This deploys Convex functions first, then builds the Vite frontend. Use this
-as the Vercel build command.
-
-### Step 3 — Vercel environment variables
+### Step 2 — Vercel environment variables
 
 Set these in Vercel → Project → Settings → Environment Variables:
 
 | Variable | Value |
 |----------|-------|
-| `CONVEX_DEPLOY_KEY` | From Convex Dashboard → Settings → Deploy Keys |
-| `VITE_CONVEX_URL` | `https://your-project.convex.cloud` |
-| `VITE_HERCULES_OIDC_AUTHORITY` | Your OIDC provider authority URL |
-| `VITE_HERCULES_OIDC_CLIENT_ID` | Your OIDC client ID |
-| `VITE_APP_URL` | Your Vercel production URL |
+| `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
 
-**Do NOT put `RAZORPAY_KEY_SECRET` or `HERCULES_API_KEY` in Vercel.**
-Those are backend-only secrets and must only be in Convex Dashboard environment
-variables.
+**Never put `RAZORPAY_KEY_SECRET`, `RESEND_API_KEY`, `OPENAI_API_KEY`, or
+any Supabase service-role key in Vercel.** Those are backend-only secrets
+and must only live in Supabase Edge Function secrets
+(`supabase secrets set ...`).
 
-### Step 4 — Vercel SPA routing
+### Step 3 — Vercel SPA routing
 
-This is a client-side SPA. Create `vercel.json` in the project root:
+This is a client-side SPA. `vercel.json` at the project root already
+contains the required rewrite:
 
 ```json
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
 ```
 
 This ensures direct URL access (e.g. `/product/ui-component-kit`) works
-without a 404.
+without a 404. There are no Vercel serverless API routes in this project —
+all backend logic runs on Supabase Edge Functions, invoked client-side via
+`supabase.functions.invoke()`.
 
 ---
 
-## 9. Schema Compatibility Report
+## 8. Schema Reference
 
-### Tables
+The authoritative schema is `supabase/migrations/00001_schema.sql`. Summary:
 
-#### `users`
-| Field | Type | Notes |
-|-------|------|-------|
-| `_id` | `Id<"users">` | Auto-generated |
-| `_creationTime` | `number` | Auto-generated (ms timestamp) |
-| `tokenIdentifier` | `string` | OIDC `{issuer}\|{subject}` |
-| `name` | `string?` | |
-| `email` | `string?` | |
-| `role` | `"user"\|"admin"\|"super_admin"` optional | |
-
-Indexes: `by_token` on `["tokenIdentifier"]`
-
----
+#### `profiles`
+Mirrors `auth.users` 1:1 (`id` is the FK/PK). `role` is `admin` |
+`super_admin` | `null`. Auto-populated by the `handle_new_user()` trigger on
+signup.
 
 #### `products`
-| Field | Type |
-|-------|------|
-| `name` | `string` |
-| `slug` | `string` — unique |
-| `category` | `string` |
-| `tagline` | `string` |
-| `description` | `string` |
-| `price` | `number` — INR |
-| `originalPrice` | `number` — INR |
-| `badge` | `string?` |
-| `features` | `string[]` |
-| `highlights` | `{label: string, value: string}[]` |
-| `whatsIncluded` | `string[]` |
-| `image` | `string` — URL |
-| `screenshots` | `string[]` — URLs |
-| `upsellProductIds` | `Id<"products">[]?` |
+`name`, `slug` (unique), `category`, `tagline`, `description`, `price`,
+`original_price`, `badge`, `features`/`highlights`/`whats_included` (jsonb),
+`image`, `screenshots` (jsonb), `upsell_product_ids` (jsonb).
 
-Indexes: `by_slug` on `["slug"]`
-
----
-
-#### `deliveryAssets`
-| Field | Type |
-|-------|------|
-| `productId` | `Id<"products">` |
-| `name` | `string` |
-| `deliveryType` | `string` |
-| `url` | `string` |
-| `storageId` | `string?` |
-| `fileName` | `string?` |
-| `instructions` | `string?` |
-| `displayOrder` | `number` |
-| `enabled` | `boolean` |
-
-Indexes: `by_product` on `["productId"]`
-
----
+#### `delivery_assets`
+Per-product deliverables: `product_id`, `name`, `delivery_type`, `url`,
+`storage_path`, `file_name`, `instructions`, `display_order`, `enabled`.
+Admin-only access — buyers reach these via the `get-order-by-token` Edge
+Function.
 
 #### `orders`
-| Field | Type |
-|-------|------|
-| `razorpayOrderId` | `string` |
-| `razorpayPaymentId` | `string?` |
-| `customerName` | `string` |
-| `customerEmail` | `string` |
-| `items` | `{productId, productName, price, quantity}[]` |
-| `amountInPaise` | `number` |
-| `status` | `"created"\|"paid"\|"failed"` |
-| `orderNumber` | `string?` |
+`razorpay_order_id` (unique), `razorpay_payment_id`, `customer_name`,
+`customer_email`, `customer_mobile`, `items` (jsonb), `amount_in_paise`,
+`currency`, `promo_code`/`promo_discount`, `affiliate_code`, `status`
+(`created`|`paid`|`failed`), `order_number`, `email_sent`,
+`download_count`, `internal_notes`. Inserts/updates from client are
+service-role only (via Edge Functions); admins can read/update/delete
+through RLS.
 
-Indexes: `by_razorpay_order_id`, `by_status`, `by_email`
+#### `purchase_tokens` / `purchase_otps`
+Support the post-purchase re-access flow (OTP email → token → download
+link). No client-facing RLS policies — service role only, except admins can
+read `purchase_tokens` for data export.
 
----
+#### `coupons`
+`code` (unique), `discount_type` (`percent`|`flat`), `discount_value`,
+`usage_limit`/`usage_count`, `expires_at`, `min_order_value`, `enabled`.
+Public can read enabled coupons; admin manages.
+
+#### `affiliates`
+`name`, `code` (unique), `email`, `visits`, `conversions`, `revenue_inr`,
+`enabled`, `notes`. Admin only; visit/conversion counters are updated via
+the `record_affiliate_visit` / `record_affiliate_conversion` RPCs.
 
 #### `settings` (key-value store)
 | Key | Default | Description |
 |-----|---------|-------------|
 | `fallback_exchange_rate` | `0.012` | INR → USD rate |
-| `razorpay_key_id` | — | Razorpay public key |
-| `razorpay_key_secret` | — | Razorpay secret |
+| `razorpay_key_id` | — | Razorpay public key (fallback) |
+| `razorpay_key_secret` | — | Razorpay secret (fallback) |
 | `review_email_enabled` | `true` | Review request emails |
 | `review_request_delay_days` | `3` | Days to wait before sending review email |
 | `review_min_length` | `20` | Min review body chars |
@@ -358,50 +309,47 @@ Indexes: `by_razorpay_order_id`, `by_status`, `by_email`
 | `sp_enabled` | `false` | Social proof notifications |
 | `sp_demoMode` | `false` | Demo mode |
 
-Full key list: see `convex/settings.ts`
+Keys matching `razorpay%` are excluded from the public-read policy — only
+admins can read them back.
+
+#### `reviews`
+Buyer reviews with moderation state (`pending`|`approved`|`rejected`|
+`hidden`), verified-buyer flag, optional AI-polished title/body, and media
+attachments. Inserted via the `submit_review` RPC (validates purchase token,
+min length, media count); public reads only `approved` reviews.
+
+#### `ai_testimonials`
+Admin-curated synthetic testimonials (`review`|`whatsapp`|`email` type).
+Generation is currently disabled for new entries (consumer-protection law);
+existing entries remain manageable and display when `status = 'active'`.
+
+#### `scheduled_review_emails`
+Replaces Convex's `ctx.scheduler.runAfter` — one row per pending
+review-request email, drained by `pg_cron` → `process-review-emails`.
 
 ---
 
-### Key Backend Functions
+## 9. Edge Functions
 
-#### Public Actions (Node.js runtime)
-| Function | Description |
-|----------|-------------|
-| `api.razorpay.createOrder` | Create Razorpay order + insert DB record |
-| `api.razorpay.verifyPayment` | HMAC verify + mark paid + send email |
-| `api.razorpay.sendAccessOtp` | Send re-access OTP |
-| `api.razorpay.verifyAccessOtp` | Verify OTP + return purchase token |
+| Function | Purpose |
+|----------|---------|
+| `razorpay-create-order` | Create a Razorpay order; recomputes amount server-side |
+| `razorpay-verify-payment` | HMAC-verify payment, mark order paid, trigger delivery email |
+| `get-order-by-token` | Resolve a purchase token to order + delivery assets |
+| `send-access-otp` / `verify-access-otp` | Post-purchase re-access via email OTP |
+| `send-delivery-email` | Send the digital-delivery email for a paid order |
+| `process-review-emails` | Cron-driven: sends due `scheduled_review_emails` |
+| `polish-review` | AI polish of a submitted review (OpenAI-compatible) |
+| `generate-testimonials` | Admin tool for managing AI testimonials |
 
-#### Scheduled Functions
-| Trigger | Function | Description |
-|---------|----------|-------------|
-| `ctx.scheduler.runAfter(delayMs)` | `internal.email.sendReviewRequestEmail` | Fires N days after purchase |
-
----
-
-## 10. Data Export
-
-Use Admin → Settings → Export Data to download all live data as JSON or CSV.
-
-To import into a new Convex project:
-- Use Convex Dashboard → Data (JSON import per table)
-- Or use the `npx convex import` CLI command
+Shared helpers live in `supabase/functions/_shared/utils.ts`.
 
 ---
 
-## 11. Removing Hercules Runtime Dependency
+## 10. Data Import (optional)
 
-After completing all replacements, uninstall Hercules packages:
-
-```bash
-npm uninstall @usehercules/auth @usehercules/sdk @usehercules/vite @usehercules/eslint-plugin
-```
-
-Then update:
-- `vite.config.ts` — remove `hercules()` plugin
-- `src/hooks/use-auth.ts` — replace auth hook source
-- `src/components/ui/signin.tsx` — replace sign-in button
-- `convex/email.ts` — replace Hercules SDK email call
-- `eslint.config.js` — remove `@usehercules/eslint-plugin`
-
-After these changes, the project has zero Hercules runtime dependency.
+If migrating data from a prior deployment, use the Supabase Table Editor's
+**Insert → Import data from CSV/JSON**, or `supabase db` tooling. Files must
+be uploaded directly to the relevant Storage bucket
+(`product-images` / `review-media` / `delivery-files`) — Storage objects are
+not part of a table import.

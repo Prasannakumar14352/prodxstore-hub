@@ -233,7 +233,11 @@ function ProductGeneratePanel({
   const toggleType = (t: "review" | "whatsapp" | "email") => {
     setTypes((prev) => {
       const next = new Set(prev);
-      next.has(t) ? next.delete(t) : next.add(t);
+      if (next.has(t)) {
+        next.delete(t);
+      } else {
+        next.add(t);
+      }
       return next;
     });
   };
