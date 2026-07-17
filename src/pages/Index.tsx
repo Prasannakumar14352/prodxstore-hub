@@ -33,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useQuery } from "@/lib/api/hooks.ts";
 import { api } from "@/lib/api/index.ts";
 import type { DbProduct } from "@/lib/product-visuals.ts";
+import type { ProductStatusDoc } from "@/lib/api/types.ts";
 import { getVisuals, getBadgeColor, getProductTypeLabel } from "@/lib/product-visuals.ts";
 import { WishlistToggle, WishlistNavButton } from "@/components/wishlist-button.tsx";
 import { PriceTag } from "@/components/price-tag.tsx";
@@ -101,7 +102,7 @@ function Navbar() {
   );
 }
 
-function ProductCard({ product, index }: { product: DbProduct; index: number }) {
+function ProductCard({ product, index, statusConfig }: { product: DbProduct; index: number; statusConfig?: ProductStatusDoc }) {
   const { icon: Icon, gradient, accentColor, borderGlow } = getVisuals(product.category);
 
   // The Hub only shows a card and redirects out — the product's own landing
@@ -113,12 +114,19 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
   const externalUrl =
     product.landingPageUrl?.trim() ||
     (isExternalProductUrl(product.slug) ? normalizeExternalUrl(product.slug) : null);
-  const isComingSoon = product.status === "coming_soon";
-  const isComingSoonBlocked = isComingSoon && !externalUrl;
+  // CTA-enabled and the "badge" shown on the image both come from the
+  // admin-configured status (Admin → Settings → Product Statuses), not a
+  // hard-coded status string — this is what lets new statuses like
+  // "Waitlist" or "Beta" work without a code change. Fall back to the old
+  // "coming_soon" string check only if the status config hasn't loaded yet
+  // or the product predates the lookup-table migration.
+  const ctaEnabled = statusConfig ? statusConfig.isCtaEnabled : product.status !== "coming_soon";
+  const statusBadgeLabel = statusConfig?.badgeLabel?.trim() || (product.status === "coming_soon" && !statusConfig ? "Coming Soon" : null);
+  const ctaBlocked = !ctaEnabled && !externalUrl;
   const openInNewTab = product.openInNewTab ?? true;
   const cardImage = product.productLogo?.trim() || product.image;
   const cardDescription = product.cardShortDescription?.trim() || product.tagline;
-  const ctaLabel = isComingSoonBlocked ? "Coming Soon" : (product.ctaText?.trim() || "View Product");
+  const ctaLabel = ctaBlocked ? (statusBadgeLabel ?? "Coming Soon") : (product.ctaText?.trim() || "View Product");
 
   // Real anchor semantics for external destinations (ctrl/cmd-click, "open
   // in new tab" from the context menu, correct target/rel) rather than
@@ -137,9 +145,9 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
       />
       <div className={cn("absolute inset-0 bg-gradient-to-b", gradient, "opacity-80")} />
-      {isComingSoon && (
+      {statusBadgeLabel && (
         <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
-          Coming Soon
+          {statusBadgeLabel}
         </span>
       )}
       {product.badge && (
@@ -231,10 +239,10 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
             <Button
               size="sm"
               className="rounded-full text-xs gap-1.5 cursor-pointer"
-              disabled={isComingSoonBlocked}
-              asChild={!isComingSoonBlocked}
+              disabled={ctaBlocked}
+              asChild={!ctaBlocked}
             >
-              {isComingSoonBlocked ? (
+              {ctaBlocked ? (
                 <span>{ctaLabel}</span>
               ) : externalLinkAttrs ? (
                 <a {...externalLinkAttrs}>
@@ -300,18 +308,34 @@ const SORT_OPTIONS: { key: SortKey; label: string; icon: React.ReactNode }[] = [
 function ProductsGrid() {
   const allProducts = useQuery(api.products.list);
   const buyerCounts = useQuery(api.orders.getAllProductBuyerCounts);
+  const productStatuses = useQuery(api.productStatuses.list);
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [query, setQuery] = useState("");
   const [debouncedQuery] = useDebounce(query, 200);
   const [sortKey, setSortKey] = useState<SortKey>("featured");
   const [sortOpen, setSortOpen] = useState(false);
 
-  // Draft/archived products are admin-only — never shown on the public Hub.
-  // Older rows have no `status` (pre-migration data read before the default
-  // backfill lands) so treat a missing status as published.
+  // Resolve each product's admin-configured status row (by FK id, falling
+  // back to matching the legacy status slug for rows written before the
+  // lookup-table migration ran). Hub visibility must key off this row's
+  // `isPublic` flag — never a hard-coded `status === "published"` check —
+  // so a newly-added status (Waitlist, Beta, …) works without a redeploy.
+  const statusById = useMemo(() => new Map((productStatuses ?? []).map((s) => [s._id, s])), [productStatuses]);
+  const statusBySlug = useMemo(() => new Map((productStatuses ?? []).map((s) => [s.slug, s])), [productStatuses]);
+  const resolveStatus = (p: DbProduct) =>
+    (p.productStatusId && statusById.get(p.productStatusId)) || statusBySlug.get(p.status);
+
   const visibleProducts = useMemo(
-    () => (allProducts ?? []).filter((p) => !p.status || (p.status !== "draft" && p.status !== "archived")),
-    [allProducts],
+    () => (allProducts ?? []).filter((p) => {
+      const cfg = resolveStatus(p);
+      if (cfg) return cfg.isPublic;
+      // Status config hasn't loaded yet, or this row predates the
+      // migration — fall back to the old string check rather than hiding
+      // (or wrongly exposing) every product while state is unresolved.
+      return !p.status || (p.status !== "draft" && p.status !== "archived");
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allProducts, statusById, statusBySlug],
   );
 
   // Derive category list from visible products
@@ -537,7 +561,7 @@ function ProductsGrid() {
                 exit={{ opacity: 0, scale: 0.94 }}
                 transition={{ duration: 0.25, delay: i * 0.04 }}
               >
-                <ProductCard product={product} index={i} />
+                <ProductCard product={product} index={i} statusConfig={resolveStatus(product)} />
               </motion.div>
             ))}
           </AnimatePresence>

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import type React from "react";
 import { useQuery, useMutation, useAction } from "@/lib/api/hooks.ts";
 import { api } from "@/lib/api/index.ts";
@@ -71,6 +71,8 @@ import CouponsTab from "./_components/coupons-tab.tsx";
 import AffiliatesTab from "./_components/affiliates-tab.tsx";
 import SocialProofSettingsPanel from "./_components/social-proof-settings-panel.tsx";
 import DataExportPanel from "./_components/data-export-panel.tsx";
+import ProductTypesPanel from "./_components/product-types-panel.tsx";
+import ProductStatusesPanel from "./_components/product-statuses-panel.tsx";
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
@@ -735,6 +737,18 @@ function SettingsTab() {
       {/* ── Social Proof Notifications ── */}
       <SocialProofSettingsPanel />
 
+      {/* ── Product Configuration ── */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm text-foreground">Product Configuration</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manage the Product Type and Product Status options available in the product form.
+          </p>
+        </div>
+        <ProductTypesPanel />
+        <ProductStatusesPanel />
+      </div>
+
       <DataExportPanel />
 
     </div>
@@ -761,6 +775,8 @@ type FormValues = {
   // Hub directory / redirect-out fields
   productType: ProductType;
   status: ProductStatus;
+  productTypeId: string;
+  productStatusId: string;
   landingPageUrl: string;
   ctaText: string;
   openInNewTab: boolean;
@@ -771,24 +787,6 @@ type FormValues = {
   cardShortDescription: string;
   priceLabel: string;
 };
-
-const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string }[] = [
-  { value: "digital_product", label: "Digital Product" },
-  { value: "saas_application", label: "SaaS Application" },
-  { value: "ai_tool", label: "AI Tool" },
-  { value: "course", label: "Course" },
-  { value: "membership", label: "Membership" },
-  { value: "service", label: "Service" },
-  { value: "bundle", label: "Bundle" },
-  { value: "external_product", label: "External Product" },
-];
-
-const PRODUCT_STATUS_OPTIONS: { value: ProductStatus; label: string }[] = [
-  { value: "draft", label: "Draft" },
-  { value: "published", label: "Published" },
-  { value: "coming_soon", label: "Coming Soon" },
-  { value: "archived", label: "Archived" },
-];
 
 type DeliveryAssetForm = {
   id?: Id<"deliveryAssets">;
@@ -810,7 +808,8 @@ const EMPTY_FORM: FormValues = {
   name: "", slug: "", category: "", tagline: "", description: "",
   price: "", originalPrice: "", badge: "", image: "", screenshots: "",
   features: "", whatsIncluded: "", highlights: "",
-  productType: "digital_product", status: "published", landingPageUrl: "",
+  productType: "digital_product", status: "published",
+  productTypeId: "", productStatusId: "", landingPageUrl: "",
   ctaText: "View Product", openInNewTab: true, featured: false,
   displayOrder: "0", targetAudience: "", productLogo: "", cardShortDescription: "",
   priceLabel: "",
@@ -830,6 +829,8 @@ function toFormValues(p: DbProduct): FormValues {
     // hasn't round-tripped through the DB yet (shouldn't happen, but cheap).
     productType: p.productType ?? "digital_product",
     status: p.status ?? "published",
+    productTypeId: p.productTypeId ?? "",
+    productStatusId: p.productStatusId ?? "",
     landingPageUrl: p.landingPageUrl ?? "",
     ctaText: p.ctaText ?? "View Product",
     openInNewTab: p.openInNewTab ?? true,
@@ -1181,6 +1182,44 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<FormValues>>({});
 
+  // Loaded from Admin → Settings → Product Types/Statuses — never hard-coded.
+  const productTypes = useQuery(api.productTypes.list);
+  const productStatuses = useQuery(api.productStatuses.list);
+
+  // Active options, plus the currently-assigned one even if it's since been
+  // deactivated (so an existing product doesn't silently lose its value).
+  const typeOptions = useMemo(() => {
+    if (!productTypes) return [];
+    const active = productTypes.filter((t) => t.isActive);
+    const assigned = productTypes.find((t) => t._id === form.productTypeId && !t.isActive);
+    return assigned ? [...active, assigned].sort((a, b) => a.displayOrder - b.displayOrder) : active;
+  }, [productTypes, form.productTypeId]);
+
+  const statusOptions = useMemo(() => {
+    if (!productStatuses) return [];
+    const active = productStatuses.filter((s) => s.isActive);
+    const assigned = productStatuses.find((s) => s._id === form.productStatusId && !s.isActive);
+    return assigned ? [...active, assigned].sort((a, b) => a.displayOrder - b.displayOrder) : active;
+  }, [productStatuses, form.productStatusId]);
+
+  // For a brand-new product, default to the first active type/status once
+  // they've loaded (can't know the id up front — it's admin-configurable).
+  useEffect(() => {
+    if (isEdit || !productTypes || !productStatuses || form.productTypeId) return;
+    const defaultType = productTypes.find((t) => t.slug === "digital_product" && t.isActive) ?? productTypes.find((t) => t.isActive);
+    const defaultStatus = productStatuses.find((s) => s.slug === "published" && s.isActive) ?? productStatuses.find((s) => s.isActive);
+    if (defaultType || defaultStatus) {
+      setForm((f) => ({
+        ...f,
+        productTypeId: defaultType?._id ?? f.productTypeId,
+        productType: defaultType?.slug ?? f.productType,
+        productStatusId: defaultStatus?._id ?? f.productStatusId,
+        status: defaultStatus?.slug ?? f.status,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, productTypes, productStatuses]);
+
   const set = (field: keyof FormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const val = e.target.value;
     setForm((prev) => {
@@ -1234,6 +1273,8 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
         // just what the Hub card shows and where it sends visitors.
         productType: form.productType,
         status: form.status,
+        productTypeId: form.productTypeId || undefined,
+        productStatusId: form.productStatusId || undefined,
         landingPageUrl: form.landingPageUrl.trim() || undefined,
         ctaText: form.ctaText.trim() || "View Product",
         openInNewTab: form.openInNewTab,
@@ -1296,12 +1337,21 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
               <FormField label="Category *" error={errors.category}>
                 <Input value={form.category} onChange={set("category")} placeholder="e.g. Design" className={inputCls(errors.category)} />
               </FormField>
-              <FormField label="Product type">
-                <Select value={form.productType} onValueChange={(v) => setForm((f) => ({ ...f, productType: v as ProductType }))}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <FormField label="Product type" hint={productTypes === undefined ? "Loading…" : undefined}>
+                <Select
+                  value={form.productTypeId}
+                  onValueChange={(id) => {
+                    const t = typeOptions.find((o) => o._id === id);
+                    setForm((f) => ({ ...f, productTypeId: id, productType: t?.slug ?? f.productType }));
+                  }}
+                  disabled={productTypes === undefined}
+                >
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select a type" /></SelectTrigger>
                   <SelectContent>
-                    {PRODUCT_TYPE_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    {typeOptions.map((o) => (
+                      <SelectItem key={o._id} value={o._id}>
+                        {o.name}{!o.isActive ? " (inactive)" : ""}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1415,12 +1465,21 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
               <FormField label="CTA button text">
                 <Input value={form.ctaText} onChange={set("ctaText")} placeholder="View Product" className={inputCls()} />
               </FormField>
-              <FormField label="Status">
-                <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v as ProductStatus }))}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <FormField label="Status" hint={productStatuses === undefined ? "Loading…" : undefined}>
+                <Select
+                  value={form.productStatusId}
+                  onValueChange={(id) => {
+                    const s = statusOptions.find((o) => o._id === id);
+                    setForm((f) => ({ ...f, productStatusId: id, status: s?.slug ?? f.status }));
+                  }}
+                  disabled={productStatuses === undefined}
+                >
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select a status" /></SelectTrigger>
                   <SelectContent>
-                    {PRODUCT_STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    {statusOptions.map((o) => (
+                      <SelectItem key={o._id} value={o._id}>
+                        {o.name}{!o.isActive ? " (inactive)" : ""}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

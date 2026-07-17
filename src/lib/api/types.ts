@@ -9,11 +9,39 @@ interface BaseDoc {
   _creationTime: number; // Unix ms (derived from created_at)
 }
 
-export type ProductType =
-  | "digital_product" | "saas_application" | "ai_tool" | "course"
-  | "membership" | "service" | "bundle" | "external_product";
+// Legacy string enums — still written to `products.product_type`/`.status`
+// for backward compatibility, but no longer the source of truth. Admins can
+// add more values than these via Admin → Settings → Product Types/Statuses;
+// this union is intentionally loose (falls back to `string`) so new slugs
+// don't require a code change.
+export type ProductType = string;
+export type ProductStatus = string;
 
-export type ProductStatus = "draft" | "published" | "coming_soon" | "archived";
+export interface ProductTypeDoc extends BaseDoc {
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  displayOrder: number;
+  isActive: boolean;
+  isSystem: boolean;
+  updatedAt?: string;
+}
+
+export interface ProductStatusDoc extends BaseDoc {
+  name: string;
+  slug: string;
+  description?: string;
+  badgeLabel?: string;
+  badgeVariant?: string;
+  displayOrder: number;
+  isActive: boolean;
+  isPublic: boolean;
+  isPurchasable: boolean;
+  isCtaEnabled: boolean;
+  isSystem: boolean;
+  updatedAt?: string;
+}
 
 export interface ProductDoc extends BaseDoc {
   name: string;
@@ -36,6 +64,8 @@ export interface ProductDoc extends BaseDoc {
   // landing page — these never carry pricing/checkout logic themselves.
   productType: ProductType;
   status: ProductStatus;
+  productTypeId?: string;
+  productStatusId?: string;
   landingPageUrl?: string;
   ctaText: string;
   openInNewTab: boolean;

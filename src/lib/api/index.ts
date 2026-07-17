@@ -10,7 +10,7 @@ import { toDoc, toDocs, toRow, check } from "./mappers.ts";
 import type {
   ProductDoc, DeliveryAssetDoc, OrderDoc, CouponDoc, AffiliateDoc,
   ReviewDoc, AiTestimonialDoc, UserDoc, SocialProofSettings,
-  SocialProofNotification, OrderItem,
+  SocialProofNotification, OrderItem, ProductTypeDoc, ProductStatusDoc,
 } from "./types.ts";
 import { SEED_PRODUCTS } from "./seed-data.ts";
 
@@ -140,6 +140,147 @@ const products = {
     if (existing?.length) return;
     const rows = SEED_PRODUCTS.map((p) => toRow(p as unknown as Record<string, unknown>));
     check(await supabase.from("products").insert(rows).select("id"));
+  }),
+};
+
+// ═══════════════════════════ api.productTypes / api.productStatuses ═════════
+// Admin-manageable lookup tables — see supabase/migrations/00005_*.sql.
+// These replace the old hard-coded ProductType/ProductStatus string unions
+// as the source of truth for what options exist; `products.product_type`/
+// `.status` text columns are kept in sync for backward compatibility.
+
+async function usageCounts(column: "product_type_id" | "product_status_id", ids: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (ids.length === 0) return counts;
+  const rows = check(await supabase.from("products").select(column).in(column, ids));
+  for (const row of (rows ?? []) as Record<string, string | null>[]) {
+    const id = row[column];
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+const productTypes = {
+  list: tag("productTypes.list", async (): Promise<ProductTypeDoc[]> => {
+    const rows = check(await supabase.from("product_types").select("*").order("display_order"));
+    return toDocs<ProductTypeDoc>(rows);
+  }),
+
+  listWithUsage: tag("productTypes.listWithUsage",
+    async (): Promise<Array<ProductTypeDoc & { usageCount: number }>> => {
+      const rows = toDocs<ProductTypeDoc>(
+        check(await supabase.from("product_types").select("*").order("display_order")),
+      );
+      const counts = await usageCounts("product_type_id", rows.map((r) => r._id));
+      return rows.map((r) => ({ ...r, usageCount: counts.get(r._id) ?? 0 }));
+    }),
+
+  create: tag("productTypes.create",
+    async (args: { name: string; slug: string; description?: string; icon?: string; displayOrder?: number }) => {
+      const existing = check(await supabase.from("product_types").select("id").eq("slug", args.slug).limit(1));
+      if (existing?.length) throw new Error("A product type with this slug already exists.");
+      const rows = check(await supabase.from("product_types").insert(toRow({
+        name: args.name, slug: args.slug, description: args.description,
+        icon: args.icon, displayOrder: args.displayOrder ?? 0,
+      })).select("id"));
+      return rows?.[0]?.id as string;
+    }),
+
+  update: tag("productTypes.update", async (args: {
+    id: string; name: string; slug: string; description?: string; icon?: string;
+    displayOrder: number; isActive: boolean;
+  }) => {
+    const existing = check(await supabase.from("product_types").select("id").eq("slug", args.slug).limit(1));
+    if (existing?.length && existing[0].id !== args.id) {
+      throw new Error("A product type with this slug already exists.");
+    }
+    const { id, ...fields } = args;
+    check(await supabase.from("product_types")
+      .update({ ...toRow(fields), updated_at: new Date().toISOString() })
+      .eq("id", id).select("id"));
+  }),
+
+  /** Reassigns every product using `id` to `replacementId` (if given), then deletes `id`. System rows and in-use rows without a replacement are rejected. */
+  remove: tag("productTypes.remove", async (args: { id: string; replacementId?: string }) => {
+    const rows = check(await supabase.from("product_types").select("*").eq("id", args.id).limit(1));
+    const row = rows?.[0];
+    if (!row) return;
+    if (row.is_system) throw new Error("System product types cannot be deleted. Deactivate it instead.");
+    const counts = await usageCounts("product_type_id", [args.id]);
+    const inUse = counts.get(args.id) ?? 0;
+    if (inUse > 0) {
+      if (!args.replacementId) {
+        throw new Error(`${inUse} product${inUse === 1 ? "" : "s"} still use this type. Choose a replacement to reassign them first.`);
+      }
+      check(await supabase.from("products")
+        .update({ product_type_id: args.replacementId })
+        .eq("product_type_id", args.id).select("id"));
+    }
+    check(await supabase.from("product_types").delete().eq("id", args.id));
+  }),
+};
+
+const productStatuses = {
+  list: tag("productStatuses.list", async (): Promise<ProductStatusDoc[]> => {
+    const rows = check(await supabase.from("product_statuses").select("*").order("display_order"));
+    return toDocs<ProductStatusDoc>(rows);
+  }),
+
+  listWithUsage: tag("productStatuses.listWithUsage",
+    async (): Promise<Array<ProductStatusDoc & { usageCount: number }>> => {
+      const rows = toDocs<ProductStatusDoc>(
+        check(await supabase.from("product_statuses").select("*").order("display_order")),
+      );
+      const counts = await usageCounts("product_status_id", rows.map((r) => r._id));
+      return rows.map((r) => ({ ...r, usageCount: counts.get(r._id) ?? 0 }));
+    }),
+
+  create: tag("productStatuses.create", async (args: {
+    name: string; slug: string; description?: string; badgeLabel?: string; badgeVariant?: string;
+    displayOrder?: number; isPublic: boolean; isPurchasable: boolean; isCtaEnabled: boolean;
+  }) => {
+    const existing = check(await supabase.from("product_statuses").select("id").eq("slug", args.slug).limit(1));
+    if (existing?.length) throw new Error("A product status with this slug already exists.");
+    const rows = check(await supabase.from("product_statuses").insert(toRow({
+      name: args.name, slug: args.slug, description: args.description,
+      badgeLabel: args.badgeLabel, badgeVariant: args.badgeVariant, displayOrder: args.displayOrder ?? 0,
+      isPublic: args.isPublic, isPurchasable: args.isPurchasable, isCtaEnabled: args.isCtaEnabled,
+    })).select("id"));
+    return rows?.[0]?.id as string;
+  }),
+
+  update: tag("productStatuses.update", async (args: {
+    id: string; name: string; slug: string; description?: string; badgeLabel?: string; badgeVariant?: string;
+    displayOrder: number; isActive: boolean; isPublic: boolean; isPurchasable: boolean; isCtaEnabled: boolean;
+  }) => {
+    const existing = check(await supabase.from("product_statuses").select("id").eq("slug", args.slug).limit(1));
+    if (existing?.length && existing[0].id !== args.id) {
+      throw new Error("A product status with this slug already exists.");
+    }
+    const { id, ...fields } = args;
+    check(await supabase.from("product_statuses")
+      .update({ ...toRow(fields), updated_at: new Date().toISOString() })
+      .eq("id", id).select("id"));
+  }),
+
+  /** Reassigns every product using `id` to `replacementId` (if given), then deletes `id`. System rows and in-use rows without a replacement are rejected. */
+  remove: tag("productStatuses.remove", async (args: { id: string; replacementId?: string }) => {
+    const rows = check(await supabase.from("product_statuses").select("*").eq("id", args.id).limit(1));
+    const row = rows?.[0];
+    if (!row) return;
+    if (row.is_system) throw new Error("System product statuses cannot be deleted. Deactivate it instead.");
+    const counts = await usageCounts("product_status_id", [args.id]);
+    const inUse = counts.get(args.id) ?? 0;
+    if (inUse > 0) {
+      if (!args.replacementId) {
+        throw new Error(`${inUse} product${inUse === 1 ? "" : "s"} still use this status. Choose a replacement to reassign them first.`);
+      }
+      check(await supabase.from("products")
+        .update({ product_status_id: args.replacementId })
+        .eq("product_status_id", args.id).select("id"));
+    }
+    check(await supabase.from("product_statuses").delete().eq("id", args.id));
   }),
 };
 
@@ -921,9 +1062,9 @@ const dataExport = {
 // ═══════════════════════════ export ══════════════════════════════════════════
 
 export const api = {
-  products, deliveryAssets, orders, coupons, affiliates, settings, socialProof,
-  reviews, reviewsAi, aiTestimonials, aiTestimonialsGen, razorpay, users,
-  storage, analytics, dataExport,
+  products, productTypes, productStatuses, deliveryAssets, orders, coupons,
+  affiliates, settings, socialProof, reviews, reviewsAi, aiTestimonials,
+  aiTestimonialsGen, razorpay, users, storage, analytics, dataExport,
 };
 
 export { supabase } from "./supabase.ts";
