@@ -1,10 +1,29 @@
-import { Link } from "react-router-dom";
-import { ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ShieldAlert, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { useAuthActions } from "@/hooks/use-auth.ts";
 
 export default function AdminUnauthorizedPage() {
+  const navigate = useNavigate();
   const { signOut } = useAuthActions();
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSignOut = async () => {
+    setError(null);
+    setSigningOut(true);
+    try {
+      await signOut();
+      // Session is cleared, but nothing on this page watches auth state —
+      // send the user back to the login screen explicitly instead of
+      // silently leaving them stranded on /admin/unauthorized.
+      navigate("/admin", { replace: true });
+    } catch {
+      setError("Couldn't sign out. Please try again.");
+      setSigningOut(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
@@ -20,12 +39,22 @@ export default function AdminUnauthorizedPage() {
           Your account is signed in but doesn't have admin privileges. Contact the store owner
           if you believe this is a mistake.
         </p>
+        {error && (
+          <p role="alert" className="text-sm text-destructive mb-4">
+            {error}
+          </p>
+        )}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button asChild variant="secondary" className="rounded-full">
             <Link to="/">Back to store</Link>
           </Button>
-          <Button className="rounded-full" onClick={() => signOut()}>
-            Sign out
+          <Button
+            className="rounded-full gap-2 cursor-pointer"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut && <Loader2 className="w-4 h-4 animate-spin" />}
+            {signingOut ? "Signing out…" : "Sign out"}
           </Button>
         </div>
       </div>

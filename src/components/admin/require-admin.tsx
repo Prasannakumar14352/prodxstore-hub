@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useConvexAuth } from "@/lib/api/hooks.ts";
 import { useCurrentUser } from "@/hooks/use-auth.ts";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { hasAdminAccess } from "@/lib/auth.ts";
 
 // Gates admin-only content: while auth/role status is loading, renders only a
 // spinner (no admin content is ever mounted before the check resolves).
@@ -12,7 +13,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const { user, isLoading: isUserLoading } = useCurrentUser();
   const isLoading = isAuthLoading || isUserLoading;
-  const isAdmin = !!user && (user.role === "admin" || user.role === "super_admin");
+  const isAdmin = !!user && hasAdminAccess(user.role);
 
   useEffect(() => {
     if (isLoading) return;

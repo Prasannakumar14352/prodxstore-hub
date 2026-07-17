@@ -548,8 +548,17 @@ const socialProof = {
 
   getRecentPurchases: tag("socialProof.getRecentPurchases",
     async (): Promise<SocialProofNotification[]> => {
-      const data = check(await supabase.rpc("get_recent_purchases"));
-      return (data as SocialProofNotification[]) ?? [];
+      // Never throw: a missing/failing RPC must not break the page or trip
+      // react-query's retry loop. Fail closed to an empty list instead.
+      try {
+        const data = check(await supabase.rpc("get_recent_purchases"));
+        return (data as SocialProofNotification[]) ?? [];
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn("socialProof.getRecentPurchases failed, showing no live purchases:", err);
+        }
+        return [];
+      }
     }),
 };
 

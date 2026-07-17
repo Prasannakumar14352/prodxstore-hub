@@ -12,10 +12,16 @@ type ExchangeRateResult = {
 const HARDCODED_FALLBACK = 0.012; // last-resort if both API and DB fail
 
 async function fetchLiveRate(): Promise<number> {
-  const res = await fetch("https://api.frankfurter.app/latest?from=INR&to=USD");
+  // Server-side proxy (api/exchange-rate.ts) — the browser never calls
+  // api.frankfurter.app directly, since that upstream doesn't send CORS
+  // headers for our production origin.
+  const res = await fetch("/api/exchange-rate?from=INR&to=USD");
   if (!res.ok) throw new Error("Rate API error");
-  const data = await res.json() as { rates: { USD: number } };
-  return data.rates.USD;
+  const data = await res.json() as { rate: number };
+  if (typeof data.rate !== "number" || !Number.isFinite(data.rate) || data.rate <= 0) {
+    throw new Error("Rate API returned an invalid rate");
+  }
+  return data.rate;
 }
 
 export function useExchangeRate(): ExchangeRateResult {

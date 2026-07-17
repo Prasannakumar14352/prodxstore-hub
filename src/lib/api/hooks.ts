@@ -125,17 +125,32 @@ export function useAuthActions() {
         });
         if (error) throw new Error(error.message);
       }
-      void queryClient.invalidateQueries();
+      // Clear (not just invalidate) cached queries — a plain invalidate leaves
+      // the previous account's stale data in place for one render, which lets
+      // guards like RequireAdmin momentarily see the wrong user's role and
+      // redirect before the fresh profile has loaded.
+      await queryClient.removeQueries();
     },
     [queryClient],
   );
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    void queryClient.invalidateQueries();
+    await queryClient.removeQueries();
   }, [queryClient]);
 
-  return { signIn, signOut };
+  // OAuth is a redirect flow: this call navigates the browser away, so there
+  // is no cache to clear here — the SPA reloads fresh when it lands back on
+  // `redirectTo` and `detectSessionInUrl` picks up the new session.
+  const signInWithGoogle = useCallback(async (redirectTo?: string) => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: redirectTo ?? window.location.origin },
+    });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  return { signIn, signOut, signInWithGoogle };
 }
 
 // ─── <Authenticated> (replaces convex/react's component) ─────────────────────
