@@ -34,7 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useQuery } from "@/lib/api/hooks.ts";
 import { api } from "@/lib/api/index.ts";
 import type { DbProduct } from "@/lib/product-visuals.ts";
-import { getVisuals, getBadgeColor } from "@/lib/product-visuals.ts";
+import { getVisuals, getBadgeColor, getProductTypeLabel } from "@/lib/product-visuals.ts";
 import { useCart } from "@/hooks/use-cart.tsx";
 import { WishlistToggle, WishlistNavButton } from "@/components/wishlist-button.tsx";
 import { PriceTag } from "@/components/price-tag.tsx";
@@ -107,14 +107,36 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
   const { icon: Icon, gradient, accentColor, borderGlow } = getVisuals(product.category);
   const { addItem, items } = useCart();
   const inCart = items.some((i) => i.product._id === product._id);
-  const isExternal = isExternalProductUrl(product.slug);
-  const productHref = isExternal ? "#" : `/product/${product.slug}`;
+
+  // The Hub only shows a card and redirects out — the product's own landing
+  // page owns checkout, delivery, subscriptions, etc. `landingPageUrl` is
+  // the canonical field for that; the slug-as-URL check is kept only as a
+  // fallback for products created before this field existed.
+  const externalUrl =
+    product.landingPageUrl?.trim() ||
+    (isExternalProductUrl(product.slug) ? normalizeExternalUrl(product.slug) : null);
+  const isComingSoon = product.status === "coming_soon";
+  const isComingSoonBlocked = isComingSoon && !externalUrl;
+  const productHref = externalUrl ? "#" : `/product/${product.slug}`;
+  const openInNewTab = product.openInNewTab ?? true;
 
   const handleOpenProduct = (e: React.MouseEvent) => {
-    if (!isExternal) return;
+    if (isComingSoonBlocked) {
+      e.preventDefault();
+      return;
+    }
+    if (!externalUrl) return;
     e.preventDefault();
-    window.open(normalizeExternalUrl(product.slug), "_blank", "noopener,noreferrer");
+    if (openInNewTab) {
+      window.open(externalUrl, "_blank", "noopener,noreferrer");
+    } else {
+      window.location.href = externalUrl;
+    }
   };
+
+  const cardImage = product.productLogo?.trim() || product.image;
+  const cardDescription = product.cardShortDescription?.trim() || product.tagline;
+  const ctaLabel = isComingSoonBlocked ? "Coming Soon" : (product.ctaText?.trim() || "View Product");
 
   return (
     <motion.div
@@ -127,15 +149,20 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
         borderGlow
       )}
     >
-      {/* Clickable image area → product page */}
+      {/* Clickable image area → landing page (or internal product page) */}
       <Link to={productHref} onClick={handleOpenProduct} className="block">
         <div className="relative h-44 overflow-hidden">
           <img
-            src={product.image}
+            src={cardImage}
             alt={product.name}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className={cn("absolute inset-0 bg-gradient-to-b", gradient, "opacity-80")} />
+          {isComingSoon && (
+            <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
+              Coming Soon
+            </span>
+          )}
           {product.badge && (
             <span
               className={cn(
@@ -156,20 +183,28 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
 
       {/* Body */}
       <div className="p-5">
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
             {product.category}
           </span>
+          {product.productType && (
+            <>
+              <span className="text-muted-foreground/30">·</span>
+              <span className="text-[11px] text-muted-foreground/80">
+                {getProductTypeLabel(product.productType)}
+              </span>
+            </>
+          )}
         </div>
         <Link to={productHref} onClick={handleOpenProduct}>
           <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
             {product.name}
           </h3>
         </Link>
-        <p className="text-sm text-muted-foreground mb-4">{product.tagline}</p>
+        <p className="text-sm text-muted-foreground mb-4">{cardDescription}</p>
 
         <ul className="space-y-1.5 mb-5">
-          {product.features.map((f) => (
+          {product.features.slice(0, 3).map((f) => (
             <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
               <Check className={cn("w-3 h-3 shrink-0", accentColor)} />
               {f}
@@ -178,28 +213,45 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
         </ul>
 
         <div className="flex items-center justify-between">
-          <div className="flex items-baseline gap-2">
-            <PriceTag inr={product.price} className="text-xl font-bold text-foreground" />
-            <PriceTag inr={product.originalPrice} className="text-xs text-muted-foreground" strikethrough />
-          </div>
+          {product.priceLabel?.trim() ? (
+            <span className="text-sm font-bold text-foreground">{product.priceLabel}</span>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <PriceTag inr={product.price} className="text-xl font-bold text-foreground" />
+              <PriceTag inr={product.originalPrice} className="text-xs text-muted-foreground" strikethrough />
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
-            <WishlistToggle product={product} />
-            <button
-              onClick={() => { if (!inCart) addItem(product); }}
-              className={cn(
-                "w-8 h-8 rounded-full border flex items-center justify-center transition-all cursor-pointer",
-                inCart
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-white/10 bg-white/5 text-muted-foreground hover:border-primary/40 hover:text-primary"
-              )}
-              title={inCart ? "In cart" : "Add to cart"}
+            {!externalUrl && (
+              <>
+                <WishlistToggle product={product} />
+                <button
+                  onClick={() => { if (!inCart) addItem(product); }}
+                  className={cn(
+                    "w-8 h-8 rounded-full border flex items-center justify-center transition-all cursor-pointer",
+                    inCart
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-white/10 bg-white/5 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                  )}
+                  title={inCart ? "In cart" : "Add to cart"}
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+            <Button
+              size="sm"
+              className="rounded-full text-xs gap-1.5 cursor-pointer"
+              disabled={isComingSoonBlocked}
+              asChild={!isComingSoonBlocked}
             >
-              <ShoppingCart className="w-3.5 h-3.5" />
-            </button>
-            <Button size="sm" className="rounded-full text-xs gap-1.5 cursor-pointer" asChild>
-              <Link to={productHref} onClick={handleOpenProduct}>
-                View <ArrowRight className="w-3 h-3" />
-              </Link>
+              {isComingSoonBlocked ? (
+                <span>{ctaLabel}</span>
+              ) : (
+                <Link to={productHref} onClick={handleOpenProduct}>
+                  {ctaLabel} <ArrowRight className="w-3 h-3" />
+                </Link>
+              )}
             </Button>
           </div>
         </div>
@@ -261,17 +313,23 @@ function ProductsGrid() {
   const [sortKey, setSortKey] = useState<SortKey>("featured");
   const [sortOpen, setSortOpen] = useState(false);
 
-  // Derive category list from DB products
+  // Draft/archived products are admin-only — never shown on the public Hub.
+  // Older rows have no `status` (pre-migration data read before the default
+  // backfill lands) so treat a missing status as published.
+  const visibleProducts = useMemo(
+    () => (allProducts ?? []).filter((p) => !p.status || (p.status !== "draft" && p.status !== "archived")),
+    [allProducts],
+  );
+
+  // Derive category list from visible products
   const categories = useMemo(() => {
-    if (!allProducts) return ["All"];
-    const cats = [...new Set(allProducts.map((p) => p.category))];
+    const cats = [...new Set(visibleProducts.map((p) => p.category))];
     return ["All", ...cats];
-  }, [allProducts]);
+  }, [visibleProducts]);
 
   const sorted = useMemo(() => {
-    if (!allProducts) return [];
     const q = debouncedQuery.toLowerCase().trim();
-    const filtered = allProducts.filter((p) => {
+    const filtered = visibleProducts.filter((p) => {
       const matchCat = activeCategory === "All" || p.category === activeCategory;
       const matchQ =
         !q ||
@@ -298,10 +356,20 @@ function ProductsGrid() {
           return countB - countA;
         });
       default:
-        // "featured" — keep original DB order
-        return filtered;
+        // "featured" — featured products first, then by display order
+        // (admin-controlled), falling back to the DB's default newest-first
+        // order for products that share the same display order.
+        return [...filtered].sort((a, b) => {
+          const featuredA = a.featured ? 0 : 1;
+          const featuredB = b.featured ? 0 : 1;
+          if (featuredA !== featuredB) return featuredA - featuredB;
+          const orderA = a.displayOrder ?? 0;
+          const orderB = b.displayOrder ?? 0;
+          if (orderA !== orderB) return orderA - orderB;
+          return 0;
+        });
     }
-  }, [allProducts, activeCategory, debouncedQuery, sortKey, buyerCounts]);
+  }, [visibleProducts, activeCategory, debouncedQuery, sortKey, buyerCounts]);
 
   const activeSortOption = SORT_OPTIONS.find((o) => o.key === sortKey)!;
 

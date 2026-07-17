@@ -9,6 +9,12 @@ interface BaseDoc {
   _creationTime: number; // Unix ms (derived from created_at)
 }
 
+export type ProductType =
+  | "digital_product" | "saas_application" | "ai_tool" | "course"
+  | "membership" | "service" | "bundle" | "external_product";
+
+export type ProductStatus = "draft" | "published" | "coming_soon" | "archived";
+
 export interface ProductDoc extends BaseDoc {
   name: string;
   slug: string;
@@ -24,6 +30,21 @@ export interface ProductDoc extends BaseDoc {
   image: string;
   screenshots: string[];
   upsellProductIds?: string[];
+
+  // ── Hub directory / redirect-out fields ──────────────────────────────────
+  // ProdXStore Hub only shows a card + redirects to each product's own
+  // landing page — these never carry pricing/checkout logic themselves.
+  productType: ProductType;
+  status: ProductStatus;
+  landingPageUrl?: string;
+  ctaText: string;
+  openInNewTab: boolean;
+  featured: boolean;
+  displayOrder: number;
+  targetAudience?: string;
+  productLogo?: string;
+  cardShortDescription?: string;
+  priceLabel?: string;
 }
 
 export interface DeliveryAssetDoc extends BaseDoc {

@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   Check,
@@ -18,7 +18,7 @@ import { WishlistToggle } from "@/components/wishlist-button.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { cn } from "@/lib/utils.ts";
+import { cn, isExternalProductUrl, normalizeExternalUrl } from "@/lib/utils.ts";
 import { useExchangeRate } from "@/hooks/use-exchange-rate.ts";
 import ReviewsSection from "./_components/reviews-section.tsx";
 import { ProductTestimonials } from "./_components/product-testimonials.tsx";
@@ -32,6 +32,27 @@ export default function ProductPage() {
   const { addItem, items } = useCart();
   const { formatUsd } = useExchangeRate();
   const [activeScreenshot, setActiveScreenshot] = useState(0);
+
+  // A product with its own landing page shouldn't be reachable as an
+  // internal page at all — this only matters if someone lands on
+  // /product/:slug directly (e.g. an old bookmark or shared link); the Hub's
+  // own cards already link straight to the external URL.
+  const externalUrl = product
+    ? product.landingPageUrl?.trim() ||
+      (isExternalProductUrl(product.slug) ? normalizeExternalUrl(product.slug) : null)
+    : null;
+
+  useEffect(() => {
+    if (externalUrl) window.location.replace(externalUrl);
+  }, [externalUrl]);
+
+  if (externalUrl) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">Redirecting…</p>
+      </div>
+    );
+  }
 
   // Loading state
   if (product === undefined) {

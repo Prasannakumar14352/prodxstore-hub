@@ -64,6 +64,22 @@ export function getVisuals(category: string): VisualConfig {
   return CATEGORY_VISUALS[category] ?? DEFAULT_VISUAL;
 }
 
+// Human-readable label for the `product_type` directory field
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+  digital_product: "Digital Product",
+  saas_application: "SaaS Application",
+  ai_tool: "AI Tool",
+  course: "Course",
+  membership: "Membership",
+  service: "Service",
+  bundle: "Bundle",
+  external_product: "External Product",
+};
+
+export function getProductTypeLabel(productType: string): string {
+  return PRODUCT_TYPE_LABELS[productType] ?? productType;
+}
+
 // Badge color map
 export function getBadgeColor(badge: string): string {
   const map: Record<string, string> = {

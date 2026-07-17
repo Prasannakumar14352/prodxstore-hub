@@ -4,6 +4,7 @@ import { useQuery, useMutation, useAction } from "@/lib/api/hooks.ts";
 import { api } from "@/lib/api/index.ts";
 import type { Id } from "@/lib/api/types.ts";
 import type { Doc } from "@/lib/api/types.ts";
+import type { ProductType, ProductStatus } from "@/lib/api/types.ts";
 import type { DbProduct } from "@/lib/product-visuals.ts";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
@@ -53,10 +54,17 @@ import { Label } from "@/components/ui/label.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import { toast } from "sonner";
-import { ConvexError } from "@/lib/api/values.ts";
 import { useAuthActions } from "@/hooks/use-auth.ts";
 import ImageUploader from "./_components/image-uploader.tsx";
 import MultiImageUploader from "./_components/multi-image-uploader.tsx";
+import { Switch } from "@/components/ui/switch.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import ReviewsTab from "./_components/reviews-tab.tsx";
 import AnalyticsTab from "./_components/analytics-tab.tsx";
 import CouponsTab from "./_components/coupons-tab.tsx";
@@ -750,7 +758,37 @@ type FormValues = {
   features: string;
   whatsIncluded: string;
   highlights: string;
+  // Hub directory / redirect-out fields
+  productType: ProductType;
+  status: ProductStatus;
+  landingPageUrl: string;
+  ctaText: string;
+  openInNewTab: boolean;
+  featured: boolean;
+  displayOrder: string;
+  targetAudience: string;
+  productLogo: string;
+  cardShortDescription: string;
+  priceLabel: string;
 };
+
+const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string }[] = [
+  { value: "digital_product", label: "Digital Product" },
+  { value: "saas_application", label: "SaaS Application" },
+  { value: "ai_tool", label: "AI Tool" },
+  { value: "course", label: "Course" },
+  { value: "membership", label: "Membership" },
+  { value: "service", label: "Service" },
+  { value: "bundle", label: "Bundle" },
+  { value: "external_product", label: "External Product" },
+];
+
+const PRODUCT_STATUS_OPTIONS: { value: ProductStatus; label: string }[] = [
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  { value: "coming_soon", label: "Coming Soon" },
+  { value: "archived", label: "Archived" },
+];
 
 type DeliveryAssetForm = {
   id?: Id<"deliveryAssets">;
@@ -772,6 +810,10 @@ const EMPTY_FORM: FormValues = {
   name: "", slug: "", category: "", tagline: "", description: "",
   price: "", originalPrice: "", badge: "", image: "", screenshots: "",
   features: "", whatsIncluded: "", highlights: "",
+  productType: "digital_product", status: "published", landingPageUrl: "",
+  ctaText: "View Product", openInNewTab: true, featured: false,
+  displayOrder: "0", targetAudience: "", productLogo: "", cardShortDescription: "",
+  priceLabel: "",
 };
 
 function toFormValues(p: DbProduct): FormValues {
@@ -783,6 +825,20 @@ function toFormValues(p: DbProduct): FormValues {
     features: p.features.join("\n"),
     whatsIncluded: p.whatsIncluded.join("\n"),
     highlights: p.highlights.map((h) => `${h.label}:${h.value}`).join("\n"),
+    // Older rows are backfilled by the migration's column defaults, so these
+    // are always present — the `??` fallbacks only matter for a doc that
+    // hasn't round-tripped through the DB yet (shouldn't happen, but cheap).
+    productType: p.productType ?? "digital_product",
+    status: p.status ?? "published",
+    landingPageUrl: p.landingPageUrl ?? "",
+    ctaText: p.ctaText ?? "View Product",
+    openInNewTab: p.openInNewTab ?? true,
+    featured: p.featured ?? false,
+    displayOrder: String(p.displayOrder ?? 0),
+    targetAudience: p.targetAudience ?? "",
+    productLogo: p.productLogo ?? "",
+    cardShortDescription: p.cardShortDescription ?? "",
+    priceLabel: p.priceLabel ?? "",
   };
 }
 
@@ -796,6 +852,15 @@ function slugify(name: string): string {
 function inputCls(error?: string) {
   return cn("border bg-background text-sm focus:ring-2 focus:ring-primary/40 transition-colors",
     error ? "border-destructive" : "border-white/10");
+}
+
+function FormSectionHeader({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="border-b border-white/8 pb-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      {hint && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{hint}</p>}
+    </div>
+  );
 }
 
 function FormField({ label, error, hint, children }: {
@@ -1136,6 +1201,12 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
     if (!form.price || isNaN(Number(form.price))) errs.price = "Must be a number";
     if (!form.originalPrice || isNaN(Number(form.originalPrice))) errs.originalPrice = "Must be a number";
     if (!form.image.trim()) errs.image = "Required";
+    if (form.landingPageUrl.trim() && !/^https:\/\/.+/i.test(form.landingPageUrl.trim())) {
+      errs.landingPageUrl = "Must be a valid https:// URL";
+    }
+    if (form.displayOrder.trim() && (isNaN(Number(form.displayOrder)) || Number(form.displayOrder) < 0)) {
+      errs.displayOrder = "Must be zero or greater";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -1157,6 +1228,19 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
           const idx = line.indexOf(":");
           return idx === -1 ? { label: line, value: "" } : { label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
         }),
+        // Hub directory / redirect-out fields — never checkout/payment logic,
+        // just what the Hub card shows and where it sends visitors.
+        productType: form.productType,
+        status: form.status,
+        landingPageUrl: form.landingPageUrl.trim() || undefined,
+        ctaText: form.ctaText.trim() || "View Product",
+        openInNewTab: form.openInNewTab,
+        featured: form.featured,
+        displayOrder: form.displayOrder.trim() ? Number(form.displayOrder) : 0,
+        targetAudience: form.targetAudience.trim() || undefined,
+        productLogo: form.productLogo.trim() || undefined,
+        cardShortDescription: form.cardShortDescription.trim().slice(0, 200) || undefined,
+        priceLabel: form.priceLabel.trim() || undefined,
       };
       if (isEdit) {
         await update({ id: initial._id, ...payload });
@@ -1167,12 +1251,10 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
       }
       onClose();
     } catch (err) {
-      if (err instanceof ConvexError) {
-        const data = err.data as { message: string };
-        toast.error(data.message);
-      } else {
-        toast.error("Something went wrong");
-      }
+      // The Supabase-backed api.products.create/update throws a plain Error
+      // (e.g. "A product with this slug already exists.") — surface it
+      // instead of a generic message.
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSaving(false);
     }
@@ -1198,65 +1280,167 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          <FormField label="Product name *" error={errors.name}>
-            <Input value={form.name} onChange={set("name")} placeholder="e.g. UI Component Kit" className={inputCls(errors.name)} />
-          </FormField>
-          <FormField label="URL slug *" error={errors.slug} hint="Used in the product page URL">
-            <Input value={form.slug} onChange={set("slug")} placeholder="e.g. ui-component-kit" className={inputCls(errors.slug)} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Category *" error={errors.category}>
-              <Input value={form.category} onChange={set("category")} placeholder="e.g. Design" className={inputCls(errors.category)} />
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
+          {/* ── 1. Basic Information ──────────────────────────────────── */}
+          <div className="space-y-4">
+            <FormSectionHeader title="Basic Information" />
+            <FormField label="Product name *" error={errors.name}>
+              <Input value={form.name} onChange={set("name")} placeholder="e.g. UI Component Kit" className={inputCls(errors.name)} />
             </FormField>
-            <FormField label="Badge" hint="Optional — e.g. New, Hot">
-              <Input value={form.badge} onChange={set("badge")} placeholder="Best Seller" className={inputCls()} />
+            <FormField label="URL slug *" error={errors.slug} hint="Used in the internal product page URL (/product/:slug)">
+              <Input value={form.slug} onChange={set("slug")} placeholder="e.g. ui-component-kit" className={inputCls(errors.slug)} />
+            </FormField>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Category *" error={errors.category}>
+                <Input value={form.category} onChange={set("category")} placeholder="e.g. Design" className={inputCls(errors.category)} />
+              </FormField>
+              <FormField label="Product type">
+                <Select value={form.productType} onValueChange={(v) => setForm((f) => ({ ...f, productType: v as ProductType }))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PRODUCT_TYPE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            </div>
+            <FormField label="Tagline *" error={errors.tagline} hint="One short sentence">
+              <Input value={form.tagline} onChange={set("tagline")} placeholder="300+ production-ready components" className={inputCls(errors.tagline)} />
+            </FormField>
+            <FormField label="Description *" error={errors.description} hint="2-3 sentences">
+              <textarea value={form.description} onChange={set("description")} rows={3}
+                placeholder="A comprehensive library of..."
+                className={cn("w-full rounded-lg border bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors", errors.description ? "border-destructive" : "border-white/10")} />
             </FormField>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Price ($) *" error={errors.price}>
-              <Input type="number" min="0" value={form.price} onChange={set("price")} placeholder="49" className={inputCls(errors.price)} />
+
+          {/* ── 2. Card Display ───────────────────────────────────────── */}
+          <div className="space-y-4">
+            <FormSectionHeader title="Card Display" />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Badge" hint="Optional — e.g. New, Hot">
+                <Input value={form.badge} onChange={set("badge")} placeholder="Best Seller" className={inputCls()} />
+              </FormField>
+              <FormField label="Target audience" hint="Optional — shown as a short tag">
+                <Input value={form.targetAudience} onChange={set("targetAudience")} placeholder="Content Creators" className={inputCls()} />
+              </FormField>
+            </div>
+            <FormField label="Card short description" hint={`Optional — shown on the Hub card instead of the tagline (${form.cardShortDescription.length}/200)`}>
+              <textarea value={form.cardShortDescription} onChange={set("cardShortDescription")} rows={2} maxLength={200}
+                placeholder="A short, punchy summary for the product card..."
+                className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
             </FormField>
-            <FormField label="Original price ($) *" error={errors.originalPrice}>
-              <Input type="number" min="0" value={form.originalPrice} onChange={set("originalPrice")} placeholder="89" className={inputCls(errors.originalPrice)} />
+            <FormField label="Features" hint="Up to 3 shown on the card — one per line">
+              <textarea value={form.features} onChange={set("features")} rows={3}
+                placeholder={"Figma + React source\nDark & light themes\nLifetime updates"}
+                className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
             </FormField>
           </div>
-          <FormField label="Tagline *" error={errors.tagline} hint="One short sentence">
-            <Input value={form.tagline} onChange={set("tagline")} placeholder="300+ production-ready components" className={inputCls(errors.tagline)} />
-          </FormField>
-          <FormField label="Description *" error={errors.description} hint="2-3 sentences">
-            <textarea value={form.description} onChange={set("description")} rows={3}
-              placeholder="A comprehensive library of..."
-              className={cn("w-full rounded-lg border bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors", errors.description ? "border-destructive" : "border-white/10")} />
-          </FormField>
-          <ImageUploader
-            label="Main Image *"
-            hint="Main product image"
-            value={form.image}
-            onChange={(url) => setForm((f) => ({ ...f, image: url }))}
-            error={errors.image}
-          />
-          <MultiImageUploader
-            label="Screenshots"
-            hint="Product preview images"
-            value={form.screenshots}
-            onChange={(val) => setForm((f) => ({ ...f, screenshots: val }))}
-          />
-          <FormField label="Features" hint="3 bullet points shown on the card — one per line">
-            <textarea value={form.features} onChange={set("features")} rows={3}
-              placeholder={"Figma + React source\nDark & light themes\nLifetime updates"}
-              className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
-          </FormField>
-          <FormField label="What's included" hint="One item per line">
-            <textarea value={form.whatsIncluded} onChange={set("whatsIncluded")} rows={4}
-              placeholder={"300+ Figma frames\nReact source code\n..."}
-              className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
-          </FormField>
-          <FormField label="Highlights" hint="Label:Value — one per line, e.g. Components:300+">
-            <textarea value={form.highlights} onChange={set("highlights")} rows={4}
-              placeholder={"Components:300+\nFile formats:Figma, TSX\nThemes:Dark & Light\nUpdates:Lifetime"}
-              className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
-          </FormField>
+
+          {/* ── 3. Pricing Display ────────────────────────────────────── */}
+          <div className="space-y-4">
+            <FormSectionHeader title="Pricing Display" hint="Display only — no payments or subscriptions happen in the Hub" />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Price ($) *" error={errors.price}>
+                <Input type="number" min="0" value={form.price} onChange={set("price")} placeholder="49" className={inputCls(errors.price)} />
+              </FormField>
+              <FormField label="Original price ($) *" error={errors.originalPrice}>
+                <Input type="number" min="0" value={form.originalPrice} onChange={set("originalPrice")} placeholder="89" className={inputCls(errors.originalPrice)} />
+              </FormField>
+            </div>
+            <FormField label="Price label" hint='Optional — overrides the numeric price display, e.g. "Starts at ₹499/month" or "Contact for Pricing"'>
+              <Input value={form.priceLabel} onChange={set("priceLabel")} placeholder="Free Trial Available" className={inputCls()} />
+            </FormField>
+          </div>
+
+          {/* ── 4. Media ───────────────────────────────────────────────── */}
+          <div className="space-y-4">
+            <FormSectionHeader title="Media" />
+            <ImageUploader
+              label="Main Image *"
+              hint="Main product image"
+              value={form.image}
+              onChange={(url) => setForm((f) => ({ ...f, image: url }))}
+              error={errors.image}
+            />
+            <ImageUploader
+              label="Product logo"
+              hint="Optional — small square mark, used on the card when set"
+              value={form.productLogo}
+              onChange={(url) => setForm((f) => ({ ...f, productLogo: url }))}
+            />
+            <MultiImageUploader
+              label="Screenshots"
+              hint="Product preview images"
+              value={form.screenshots}
+              onChange={(val) => setForm((f) => ({ ...f, screenshots: val }))}
+            />
+          </div>
+
+          {/* ── 5. Features and Highlights ────────────────────────────── */}
+          <div className="space-y-4">
+            <FormSectionHeader title="Features and Highlights" />
+            <FormField label="What's included" hint="One item per line">
+              <textarea value={form.whatsIncluded} onChange={set("whatsIncluded")} rows={4}
+                placeholder={"300+ Figma frames\nReact source code\n..."}
+                className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
+            </FormField>
+            <FormField label="Highlights" hint="Label:Value — one per line, e.g. Product Type:SaaS Application">
+              <textarea value={form.highlights} onChange={set("highlights")} rows={4}
+                placeholder={"Product Type:SaaS Application\nAccess:Web Application\nPricing:Free Trial\nAudience:Content Creators"}
+                className="w-full rounded-lg border border-white/10 bg-background text-sm text-foreground placeholder:text-muted-foreground px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors" />
+            </FormField>
+          </div>
+
+          {/* ── 6. Link and Publishing Settings ───────────────────────── */}
+          <div className="space-y-4">
+            <FormSectionHeader title="Link and Publishing Settings" />
+            <FormField
+              label="Landing page URL"
+              error={errors.landingPageUrl}
+              hint="External URL for this product's own landing page — the Hub card links out here instead of the internal product page"
+            >
+              <Input
+                value={form.landingPageUrl}
+                onChange={set("landingPageUrl")}
+                placeholder="https://kids.prodxstore.com"
+                className={inputCls(errors.landingPageUrl)}
+              />
+            </FormField>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="CTA button text">
+                <Input value={form.ctaText} onChange={set("ctaText")} placeholder="View Product" className={inputCls()} />
+              </FormField>
+              <FormField label="Status">
+                <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v as ProductStatus }))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PRODUCT_STATUS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            </div>
+            <FormField label="Display order" error={errors.displayOrder} hint="Lower numbers show first on the Hub page">
+              <Input type="number" min="0" step="1" value={form.displayOrder} onChange={set("displayOrder")} placeholder="0" className={inputCls(errors.displayOrder)} />
+            </FormField>
+            <div className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-2.5">
+              <div>
+                <p className="text-sm text-foreground">Open in new tab</p>
+                <p className="text-[11px] text-muted-foreground">Landing page opens in a new browser tab</p>
+              </div>
+              <Switch checked={form.openInNewTab} onCheckedChange={(v) => setForm((f) => ({ ...f, openInNewTab: v }))} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-2.5">
+              <div>
+                <p className="text-sm text-foreground">Featured product</p>
+                <p className="text-[11px] text-muted-foreground">Shown first in the "Featured" sort on the Hub</p>
+              </div>
+              <Switch checked={form.featured} onCheckedChange={(v) => setForm((f) => ({ ...f, featured: v }))} />
+            </div>
+          </div>
 
           {/* ── Delivery Assets (only for existing products) */}
           {isEdit && (
@@ -1341,6 +1525,19 @@ function ProductRow({ product, onEdit, onDelete, onUpsell }: { product: DbProduc
           <p className="font-medium text-sm text-foreground truncate">{product.name}</p>
           {product.badge && (
             <span className="text-[10px] px-2 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">{product.badge}</span>
+          )}
+          {product.featured && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 font-medium">Featured</span>
+          )}
+          {product.status && product.status !== "published" && (
+            <span className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full border font-medium capitalize",
+              product.status === "draft" && "border-white/15 bg-white/5 text-muted-foreground",
+              product.status === "coming_soon" && "border-sky-500/30 bg-sky-500/10 text-sky-400",
+              product.status === "archived" && "border-destructive/30 bg-destructive/10 text-destructive",
+            )}>
+              {product.status.replace("_", " ")}
+            </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground truncate">{product.category} · {product.tagline}</p>
