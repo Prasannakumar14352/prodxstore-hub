@@ -12,8 +12,6 @@ import RefPage from "./pages/ref/page.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { CartProvider } from "./hooks/use-cart.tsx";
 import { WishlistProvider } from "./hooks/use-wishlist.tsx";
-import { CartDrawer } from "./components/cart-drawer.tsx";
-import { CartButton } from "./components/cart-button.tsx";
 import { WishlistDrawer } from "./components/wishlist-drawer.tsx";
 import { ErrorBoundary } from "./components/error-boundary.tsx";
 import { SocialProofNotifications } from "./components/social-proof-notifications.tsx";
@@ -54,8 +52,6 @@ export default function App() {
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
-              <CartDrawer />
-              <CartButton />
               <WishlistDrawer />
               <SocialProofNotifications />
             </CartProvider>

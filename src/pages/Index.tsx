@@ -15,7 +15,6 @@ import {
   TrendingUp,
   Menu,
   X,
-  ShoppingCart,
   Search,
   SlidersHorizontal,
   Mail,
@@ -35,7 +34,6 @@ import { useQuery } from "@/lib/api/hooks.ts";
 import { api } from "@/lib/api/index.ts";
 import type { DbProduct } from "@/lib/product-visuals.ts";
 import { getVisuals, getBadgeColor, getProductTypeLabel } from "@/lib/product-visuals.ts";
-import { useCart } from "@/hooks/use-cart.tsx";
 import { WishlistToggle, WishlistNavButton } from "@/components/wishlist-button.tsx";
 import { PriceTag } from "@/components/price-tag.tsx";
 import { useExchangeRate } from "@/hooks/use-exchange-rate.ts";
@@ -105,38 +103,62 @@ function Navbar() {
 
 function ProductCard({ product, index }: { product: DbProduct; index: number }) {
   const { icon: Icon, gradient, accentColor, borderGlow } = getVisuals(product.category);
-  const { addItem, items } = useCart();
-  const inCart = items.some((i) => i.product._id === product._id);
 
   // The Hub only shows a card and redirects out — the product's own landing
   // page owns checkout, delivery, subscriptions, etc. `landingPageUrl` is
   // the canonical field for that; the slug-as-URL check is kept only as a
-  // fallback for products created before this field existed.
+  // fallback for products created before this field existed. If neither is
+  // set, fall back to the existing internal /product/:slug page rather than
+  // producing a broken link.
   const externalUrl =
     product.landingPageUrl?.trim() ||
     (isExternalProductUrl(product.slug) ? normalizeExternalUrl(product.slug) : null);
   const isComingSoon = product.status === "coming_soon";
   const isComingSoonBlocked = isComingSoon && !externalUrl;
-  const productHref = externalUrl ? "#" : `/product/${product.slug}`;
   const openInNewTab = product.openInNewTab ?? true;
-
-  const handleOpenProduct = (e: React.MouseEvent) => {
-    if (isComingSoonBlocked) {
-      e.preventDefault();
-      return;
-    }
-    if (!externalUrl) return;
-    e.preventDefault();
-    if (openInNewTab) {
-      window.open(externalUrl, "_blank", "noopener,noreferrer");
-    } else {
-      window.location.href = externalUrl;
-    }
-  };
-
   const cardImage = product.productLogo?.trim() || product.image;
   const cardDescription = product.cardShortDescription?.trim() || product.tagline;
   const ctaLabel = isComingSoonBlocked ? "Coming Soon" : (product.ctaText?.trim() || "View Product");
+
+  // Real anchor semantics for external destinations (ctrl/cmd-click, "open
+  // in new tab" from the context menu, correct target/rel) rather than
+  // hijacking clicks with JS — react-router's <Link> only for the
+  // internal-fallback case (no landing page URL set for this product yet).
+  const externalLinkAttrs = externalUrl
+    ? { href: externalUrl, target: openInNewTab ? "_blank" : undefined, rel: openInNewTab ? "noopener noreferrer" : undefined }
+    : null;
+  const internalHref = `/product/${product.slug}`;
+
+  const media = (
+    <div className="relative h-44 overflow-hidden">
+      <img
+        src={cardImage}
+        alt={product.name}
+        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
+      <div className={cn("absolute inset-0 bg-gradient-to-b", gradient, "opacity-80")} />
+      {isComingSoon && (
+        <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
+          Coming Soon
+        </span>
+      )}
+      {product.badge && (
+        <span
+          className={cn(
+            "absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-full border",
+            getBadgeColor(product.badge)
+          )}
+        >
+          {product.badge}
+        </span>
+      )}
+      <div className="absolute bottom-3 left-3">
+        <div className="w-9 h-9 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 flex items-center justify-center">
+          <Icon className={cn("w-4 h-4", accentColor)} />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <motion.div
@@ -150,36 +172,11 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
       )}
     >
       {/* Clickable image area → landing page (or internal product page) */}
-      <Link to={productHref} onClick={handleOpenProduct} className="block">
-        <div className="relative h-44 overflow-hidden">
-          <img
-            src={cardImage}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          <div className={cn("absolute inset-0 bg-gradient-to-b", gradient, "opacity-80")} />
-          {isComingSoon && (
-            <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
-              Coming Soon
-            </span>
-          )}
-          {product.badge && (
-            <span
-              className={cn(
-                "absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-full border",
-                getBadgeColor(product.badge)
-              )}
-            >
-              {product.badge}
-            </span>
-          )}
-          <div className="absolute bottom-3 left-3">
-            <div className="w-9 h-9 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 flex items-center justify-center">
-              <Icon className={cn("w-4 h-4", accentColor)} />
-            </div>
-          </div>
-        </div>
-      </Link>
+      {externalLinkAttrs ? (
+        <a {...externalLinkAttrs} className="block">{media}</a>
+      ) : (
+        <Link to={internalHref} className="block">{media}</Link>
+      )}
 
       {/* Body */}
       <div className="p-5">
@@ -196,11 +193,19 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
             </>
           )}
         </div>
-        <Link to={productHref} onClick={handleOpenProduct}>
-          <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
-            {product.name}
-          </h3>
-        </Link>
+        {externalLinkAttrs ? (
+          <a {...externalLinkAttrs}>
+            <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
+              {product.name}
+            </h3>
+          </a>
+        ) : (
+          <Link to={internalHref}>
+            <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
+              {product.name}
+            </h3>
+          </Link>
+        )}
         <p className="text-sm text-muted-foreground mb-4">{cardDescription}</p>
 
         <ul className="space-y-1.5 mb-5">
@@ -222,23 +227,7 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            {!externalUrl && (
-              <>
-                <WishlistToggle product={product} />
-                <button
-                  onClick={() => { if (!inCart) addItem(product); }}
-                  className={cn(
-                    "w-8 h-8 rounded-full border flex items-center justify-center transition-all cursor-pointer",
-                    inCart
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-white/10 bg-white/5 text-muted-foreground hover:border-primary/40 hover:text-primary"
-                  )}
-                  title={inCart ? "In cart" : "Add to cart"}
-                >
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
+            <WishlistToggle product={product} />
             <Button
               size="sm"
               className="rounded-full text-xs gap-1.5 cursor-pointer"
@@ -247,8 +236,12 @@ function ProductCard({ product, index }: { product: DbProduct; index: number }) 
             >
               {isComingSoonBlocked ? (
                 <span>{ctaLabel}</span>
+              ) : externalLinkAttrs ? (
+                <a {...externalLinkAttrs}>
+                  {ctaLabel} <ArrowRight className="w-3 h-3" />
+                </a>
               ) : (
-                <Link to={productHref} onClick={handleOpenProduct}>
+                <Link to={internalHref}>
                   {ctaLabel} <ArrowRight className="w-3 h-3" />
                 </Link>
               )}

@@ -1201,7 +1201,9 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
     if (!form.price || isNaN(Number(form.price))) errs.price = "Must be a number";
     if (!form.originalPrice || isNaN(Number(form.originalPrice))) errs.originalPrice = "Must be a number";
     if (!form.image.trim()) errs.image = "Required";
-    if (form.landingPageUrl.trim() && !/^https:\/\/.+/i.test(form.landingPageUrl.trim())) {
+    if (form.status === "published" && !form.landingPageUrl.trim()) {
+      errs.landingPageUrl = "Required for published products";
+    } else if (form.landingPageUrl.trim() && !/^https:\/\/.+/i.test(form.landingPageUrl.trim())) {
       errs.landingPageUrl = "Must be a valid https:// URL";
     }
     if (form.displayOrder.trim() && (isNaN(Number(form.displayOrder)) || Number(form.displayOrder) < 0)) {
@@ -1397,11 +1399,12 @@ function ProductFormModal({ initial, onClose }: { initial?: DbProduct; onClose: 
           <div className="space-y-4">
             <FormSectionHeader title="Link and Publishing Settings" />
             <FormField
-              label="Landing page URL"
+              label={form.status === "published" ? "Landing page URL *" : "Landing page URL"}
               error={errors.landingPageUrl}
-              hint="External URL for this product's own landing page — the Hub card links out here instead of the internal product page"
+              hint="Required to publish — the Hub card and CTA link out here instead of the internal product page. Optional while Draft or Coming Soon."
             >
               <Input
+                type="url"
                 value={form.landingPageUrl}
                 onChange={set("landingPageUrl")}
                 placeholder="https://kids.prodxstore.com"
