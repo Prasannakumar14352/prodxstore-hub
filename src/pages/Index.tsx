@@ -103,7 +103,8 @@ function Navbar() {
 }
 
 function ProductCard({ product, index, statusConfig }: { product: DbProduct; index: number; statusConfig?: ProductStatusDoc }) {
-  const { icon: Icon, gradient, accentColor, borderGlow } = getVisuals(product.category);
+  const { accentColor, borderGlow } = getVisuals(product.category);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   // The Hub only shows a card and redirects out — the product's own landing
   // page owns checkout, delivery, subscriptions, etc. `landingPageUrl` is
@@ -114,7 +115,7 @@ function ProductCard({ product, index, statusConfig }: { product: DbProduct; ind
   const externalUrl =
     product.landingPageUrl?.trim() ||
     (isExternalProductUrl(product.slug) ? normalizeExternalUrl(product.slug) : null);
-  // CTA-enabled and the "badge" shown on the image both come from the
+  // CTA-enabled and the badge shown on the image both come from the
   // admin-configured status (Admin → Settings → Product Statuses), not a
   // hard-coded status string — this is what lets new statuses like
   // "Waitlist" or "Beta" work without a code change. Fall back to the old
@@ -124,9 +125,13 @@ function ProductCard({ product, index, statusConfig }: { product: DbProduct; ind
   const statusBadgeLabel = statusConfig?.badgeLabel?.trim() || (product.status === "coming_soon" && !statusConfig ? "Coming Soon" : null);
   const ctaBlocked = !ctaEnabled && !externalUrl;
   const openInNewTab = product.openInNewTab ?? true;
-  const cardImage = product.productLogo?.trim() || product.image;
   const cardDescription = product.cardShortDescription?.trim() || product.tagline;
   const ctaLabel = ctaBlocked ? (statusBadgeLabel ?? "Coming Soon") : (product.ctaText?.trim() || "View Product");
+  const chips = product.features.slice(0, 4);
+  const discountPct =
+    product.originalPrice > product.price && product.price > 0
+      ? Math.round((1 - product.price / product.originalPrice) * 100)
+      : 0;
 
   // Real anchor semantics for external destinations (ctrl/cmd-click, "open
   // in new tab" from the context menu, correct target/rel) rather than
@@ -138,33 +143,40 @@ function ProductCard({ product, index, statusConfig }: { product: DbProduct; ind
   const internalHref = `/product/${product.slug}`;
 
   const media = (
-    <div className="relative h-44 overflow-hidden">
+    // Fixed 16:9 stage, image never cropped (object-contain) — a soft
+    // gradient canvas behind it keeps off-ratio artwork from looking bare.
+    <div className="relative aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-white/5 to-black/20">
+      {!imgLoaded && <Skeleton className="absolute inset-0 rounded-2xl" />}
       <img
-        src={cardImage}
+        src={product.image}
         alt={product.name}
-        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        loading="lazy"
+        onLoad={() => setImgLoaded(true)}
+        className={cn(
+          "w-full h-full object-contain transition-all duration-500 group-hover:scale-[1.03]",
+          imgLoaded ? "opacity-100" : "opacity-0"
+        )}
       />
-      <div className={cn("absolute inset-0 bg-gradient-to-b", gradient, "opacity-80")} />
       {statusBadgeLabel && (
-        <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30">
+        <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full border bg-sky-500/20 text-sky-300 border-sky-500/30 backdrop-blur-sm">
           {statusBadgeLabel}
         </span>
       )}
       {product.badge && (
         <span
           className={cn(
-            "absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-full border",
+            "absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-full border backdrop-blur-sm",
             getBadgeColor(product.badge)
           )}
         >
           {product.badge}
         </span>
       )}
-      <div className="absolute bottom-3 left-3">
-        <div className="w-9 h-9 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 flex items-center justify-center">
-          <Icon className={cn("w-4 h-4", accentColor)} />
+      {product.productLogo?.trim() && (
+        <div className="absolute bottom-3 left-3 w-10 h-10 rounded-xl overflow-hidden bg-black/50 backdrop-blur-sm border border-white/15 shadow-lg">
+          <img src={product.productLogo} alt="" className="w-full h-full object-contain p-1" />
         </div>
-      </div>
+      )}
     </div>
   );
 
@@ -173,22 +185,24 @@ function ProductCard({ product, index, statusConfig }: { product: DbProduct; ind
       initial={{ opacity: 0, y: 32 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.5, delay: index * 0.08, ease: "easeOut" as const }}
+      transition={{ duration: 0.5, delay: index * 0.06, ease: "easeOut" as const }}
+      whileHover={{ scale: 1.02 }}
       className={cn(
-        "group relative rounded-2xl border border-white/8 bg-card overflow-hidden transition-all duration-300",
+        "group relative flex flex-col h-[540px] rounded-2xl border border-white/8 bg-card p-3 pb-5",
+        "shadow-md shadow-black/10 hover:shadow-2xl hover:shadow-black/30 transition-shadow duration-300",
         borderGlow
       )}
     >
       {/* Clickable image area → landing page (or internal product page) */}
       {externalLinkAttrs ? (
-        <a {...externalLinkAttrs} className="block">{media}</a>
+        <a {...externalLinkAttrs} className="block shrink-0">{media}</a>
       ) : (
-        <Link to={internalHref} className="block">{media}</Link>
+        <Link to={internalHref} className="block shrink-0">{media}</Link>
       )}
 
       {/* Body */}
-      <div className="p-5">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
+      <div className="flex flex-col flex-1 min-h-0 px-2 pt-4">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
           <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">
             {product.category}
           </span>
@@ -201,61 +215,75 @@ function ProductCard({ product, index, statusConfig }: { product: DbProduct; ind
             </>
           )}
         </div>
+
         {externalLinkAttrs ? (
           <a {...externalLinkAttrs}>
-            <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
+            <h3 className="font-semibold text-base text-foreground mb-1 line-clamp-2 leading-snug hover:text-primary transition-colors">
               {product.name}
             </h3>
           </a>
         ) : (
           <Link to={internalHref}>
-            <h3 className="font-semibold text-base text-foreground mb-1 hover:text-primary transition-colors">
+            <h3 className="font-semibold text-base text-foreground mb-1 line-clamp-2 leading-snug hover:text-primary transition-colors">
               {product.name}
             </h3>
           </Link>
         )}
-        <p className="text-sm text-muted-foreground mb-4">{cardDescription}</p>
+        <p className="text-sm text-muted-foreground line-clamp-2 leading-snug mb-3">{cardDescription}</p>
 
-        <ul className="space-y-1.5 mb-5">
-          {product.features.slice(0, 3).map((f) => (
-            <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Check className={cn("w-3 h-3 shrink-0", accentColor)} />
-              {f}
-            </li>
-          ))}
-        </ul>
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {chips.map((f) => (
+              <span
+                key={f}
+                className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-full bg-white/5 border border-white/10 text-muted-foreground"
+              >
+                <Check className={cn("w-2.5 h-2.5 shrink-0", accentColor)} />
+                {f}
+              </span>
+            ))}
+          </div>
+        )}
 
-        <div className="flex items-center justify-between">
+        {/* Spacer pushes price/CTA to the bottom so every card aligns */}
+        <div className="flex-1" />
+
+        <div className="flex items-end justify-between gap-2 mb-3">
           {product.priceLabel?.trim() ? (
-            <span className="text-sm font-bold text-foreground">{product.priceLabel}</span>
+            <span className="text-base font-bold text-foreground">{product.priceLabel}</span>
           ) : (
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <PriceTag inr={product.price} className="text-xl font-bold text-foreground" />
-              <PriceTag inr={product.originalPrice} className="text-xs text-muted-foreground" strikethrough />
+              {product.originalPrice > product.price && (
+                <PriceTag inr={product.originalPrice} className="text-xs text-muted-foreground" strikethrough />
+              )}
+              {discountPct > 0 && (
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                  -{discountPct}%
+                </span>
+              )}
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <WishlistToggle product={product} />
-            <Button
-              size="sm"
-              className="rounded-full text-xs gap-1.5 cursor-pointer"
-              disabled={ctaBlocked}
-              asChild={!ctaBlocked}
-            >
-              {ctaBlocked ? (
-                <span>{ctaLabel}</span>
-              ) : externalLinkAttrs ? (
-                <a {...externalLinkAttrs}>
-                  {ctaLabel} <ArrowRight className="w-3 h-3" />
-                </a>
-              ) : (
-                <Link to={internalHref}>
-                  {ctaLabel} <ArrowRight className="w-3 h-3" />
-                </Link>
-              )}
-            </Button>
-          </div>
+          <WishlistToggle product={product} className="shrink-0" />
         </div>
+
+        <Button
+          className="w-full rounded-full gap-1.5 cursor-pointer group-hover:bg-primary/90 transition-colors"
+          disabled={ctaBlocked}
+          asChild={!ctaBlocked}
+        >
+          {ctaBlocked ? (
+            <span>{ctaLabel}</span>
+          ) : externalLinkAttrs ? (
+            <a {...externalLinkAttrs}>
+              {ctaLabel} <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          ) : (
+            <Link to={internalHref}>
+              {ctaLabel} <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </Button>
       </div>
     </motion.div>
   );
@@ -521,9 +549,9 @@ function ProductsGrid() {
 
       {/* Loading skeleton */}
       {allProducts === undefined && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-80 rounded-2xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-[520px] rounded-2xl" />
           ))}
         </div>
       )}
@@ -550,7 +578,7 @@ function ProductsGrid() {
           </button>
         </motion.div>
       ) : (
-        <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <AnimatePresence mode="popLayout">
             {sorted.map((product, i) => (
               <motion.div
