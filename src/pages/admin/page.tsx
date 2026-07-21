@@ -5,6 +5,7 @@ import { api } from "@/lib/api/index.ts";
 import type { Id } from "@/lib/api/types.ts";
 import type { Doc } from "@/lib/api/types.ts";
 import type { ProductType, ProductStatus } from "@/lib/api/types.ts";
+import { describeError } from "@/lib/api/mappers.ts";
 import type { DbProduct } from "@/lib/product-visuals.ts";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
@@ -115,8 +116,8 @@ function ReviewSettingsPanel() {
       setApprovalMode(null);
       setAiPolish(null);
       setShowEmpty(null);
-    } catch {
-      toast.error("Failed to save review settings");
+    } catch (e) {
+      toast.error(describeError(e, "Failed to save review settings"));
     } finally {
       setSaving(false);
     }
@@ -358,8 +359,8 @@ function TrustBadgeSettingsPanel() {
             setShowSecureCheckout(null);
             setShowInstantDelivery(null);
             setShowBuyerCount(null);
-          } catch {
-            toast.error("Failed to save");
+          } catch (e) {
+            toast.error(describeError(e, "Failed to save"));
           } finally {
             setSaving(false);
           }
@@ -411,8 +412,8 @@ function SettingsTab() {
       await setFallbackRate({ rate: parsed });
       toast.success("Fallback rate saved");
       setRateInput("");
-    } catch {
-      toast.error("Failed to save rate");
+    } catch (e) {
+      toast.error(describeError(e, "Failed to save rate"));
     } finally {
       setSavingRate(false);
     }
@@ -430,8 +431,7 @@ function SettingsTab() {
       setRzpKeySecret("");
       setRzpKeyId("");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to save";
-      toast.error(msg);
+      toast.error(describeError(e, "Failed to save"));
     } finally {
       setSavingRzp(false);
     }
@@ -709,8 +709,8 @@ function SettingsTab() {
                 toast.success("Review email settings saved");
                 setReviewEnabled(null);
                 setReviewDelay("");
-              } catch {
-                toast.error("Failed to save");
+              } catch (e) {
+                toast.error(describeError(e, "Failed to save"));
               } finally {
                 setSavingReview(false);
               }

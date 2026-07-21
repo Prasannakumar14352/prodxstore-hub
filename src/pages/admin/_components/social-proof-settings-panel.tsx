@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Bell, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import type { SocialProofSettings } from "@/lib/api/types.ts";
+import { describeError } from "@/lib/api/mappers.ts";
 
 // ─── Reusable toggle switch ───────────────────────────────────────────────────
 
@@ -92,8 +93,8 @@ export default function SocialProofSettingsPanel() {
     try {
       await save(cfg);
       toast.success("Social proof settings saved");
-    } catch {
-      toast.error("Failed to save settings");
+    } catch (e) {
+      toast.error(describeError(e, "Failed to save settings"));
     } finally {
       setSaving(false);
     }

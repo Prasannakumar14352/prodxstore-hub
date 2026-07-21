@@ -1,27 +1,13 @@
 // Replaces convex/reviewsAi.ts → polishReview.
 // Uses any OpenAI-compatible API: set OPENAI_API_KEY (+ optional OPENAI_BASE_URL,
 // OPENAI_MODEL). Admin-only: verifies the caller's JWT belongs to an admin.
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders, json, serviceClient } from "../_shared/utils.ts";
+import { corsHeaders, json, serviceClient, requireAdmin } from "../_shared/utils.ts";
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
   env: {
     get: (key: string) => string | undefined;
   };
 };
-async function requireAdmin(req: Request): Promise<boolean> {
-  const auth = req.headers.get("Authorization") ?? "";
-  const anon = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: auth } } },
-  );
-  const { data: { user } } = await anon.auth.getUser();
-  if (!user) return false;
-  const db = serviceClient();
-  const { data } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  return data?.role === "admin" || data?.role === "super_admin";
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

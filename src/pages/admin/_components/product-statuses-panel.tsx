@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch.tsx";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, Search, X, Lock } from "lucide-react";
 import { DeleteWithReassignDialog } from "./product-types-panel.tsx";
+import { describeError } from "@/lib/api/mappers.ts";
 
 function slugify(name: string): string {
   return name.toLowerCase().trim()
@@ -132,7 +133,7 @@ export default function ProductStatusesPanel() {
               }
               setEditing(null);
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : "Something went wrong");
+              toast.error(describeError(err, "Something went wrong"));
             }
           }}
         />
@@ -150,7 +151,7 @@ export default function ProductStatusesPanel() {
               toast.success("Product status deleted");
               setDeleting(null);
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : "Something went wrong");
+              toast.error(describeError(err, "Something went wrong"));
             }
           }}
         />

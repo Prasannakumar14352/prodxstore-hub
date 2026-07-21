@@ -27,6 +27,23 @@ export function serviceClient(): SupabaseClient {
   );
 }
 
+/** Verifies the caller's JWT belongs to an admin/super_admin `profiles` row.
+ *  Never trust a role asserted by the client — this looks it up server-side
+ *  via the service-role client, bypassing RLS. */
+export async function requireAdmin(req: Request): Promise<boolean> {
+  const auth = req.headers.get("Authorization") ?? "";
+  const anon = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: auth } } },
+  );
+  const { data: { user } } = await anon.auth.getUser();
+  if (!user) return false;
+  const db = serviceClient();
+  const { data } = await db.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  return data?.role === "admin" || data?.role === "super_admin";
+}
+
 /** Razorpay keys: env secrets take priority, falling back to the settings
  *  table so the existing Admin → Settings → Razorpay panel keeps working. */
 export async function getRazorpayKeys(

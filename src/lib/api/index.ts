@@ -549,21 +549,17 @@ const settings = {
     await setSetting("fallback_exchange_rate", String(args.rate));
   }),
 
-  getRazorpayConfig: tag("settings.getRazorpayConfig", async () => {
-    const map = await getSettingValues(["razorpay_key_id", "razorpay_key_secret"]);
-    const keyId = map.razorpay_key_id ?? null;
-    const hasSecret = !!map.razorpay_key_secret;
-    const mode: "test" | "live" | "none" = keyId
-      ? (keyId.includes("_test_") ? "test" : "live") : "none";
-    return { keyId, hasSecret, mode };
-  }),
+  // Both the read and the write go through the admin-razorpay-settings Edge
+  // Function, not a direct table select/RPC — the key secret's raw value
+  // must never be part of a browser-readable database response, even to an
+  // authorized admin session. See supabase/functions/admin-razorpay-settings.
+  getRazorpayConfig: tag("settings.getRazorpayConfig",
+    async (): Promise<{ keyId: string | null; hasSecret: boolean; mode: "test" | "live" | "none" }> =>
+      invokeFunction("admin-razorpay-settings", { action: "get" })),
 
   setRazorpayKeys: tag("settings.setRazorpayKeys",
-    async (args: { keyId: string; keySecret: string }) => {
-      if (!args.keyId.startsWith("rzp_")) throw new Error("Key ID must start with 'rzp_'");
-      if (args.keySecret.length < 10) throw new Error("Key Secret appears too short");
-      await setSetting("razorpay_key_id", args.keyId);
-      await setSetting("razorpay_key_secret", args.keySecret);
+    async (args: { keyId: string; keySecret: string }): Promise<void> => {
+      await invokeFunction("admin-razorpay-settings", { action: "set", ...args });
     }),
 
   getReviewEmailSettings: tag("settings.getReviewEmailSettings", async () => {
